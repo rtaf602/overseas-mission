@@ -617,12 +617,18 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('renderIfDirty').timeBased().everyMinutes(1).create();
   ScriptApp.newTrigger('pruneLogs').timeBased().atHour(2).everyDays(1).inTimezone(CFG.TZ).create();
-  DriveApp.getFolderById(CFG.BACKUP_FOLDER_ID).getName(); // ขอสิทธิ์ Drive ตอนนี้
+  try { DriveApp.getFolderById(CFG.BACKUP_FOLDER_ID).getName(); } // ขอสิทธิ์ Drive ตอนนี้
+  catch (x) { Logger.log('⚠ เปิดโฟลเดอร์ Backup ไม่ได้: แชร์โฟลเดอร์ให้บัญชี ' + me_() + ' เป็น "ผู้แก้ไข"'); }
   bump_();
-  Object.keys(files_()).forEach(function (y) { renderDisplay_(y); });
-  PropertiesService.getScriptProperties().setProperty('DIRTY_FYS', '[]');
+  Object.keys(files_()).forEach(function (y) {
+    Logger.log('ปีงบ ' + y + ': ไฟล์ต้นทางมี ' + readMissions_(y).length + ' ภารกิจ');
+    try { renderDisplay_(y); }
+    catch (x) { Logger.log('⚠ วาดไฟล์แสดงผลปีงบ ' + y + ' ไม่ได้: ' + x.message + ' · แชร์ไฟล์แสดงผลให้บัญชี ' + me_() + ' เป็น "ผู้แก้ไข" แล้วรัน setup อีกครั้ง (หน้าเว็บใช้งานได้แล้วแม้ไฟล์แสดงผลยังไม่ถูกวาด)'); markDirty_(y); }
+  });
   Logger.log('ตั้งค่าเสร็จแล้ว');
 }
+
+function me_() { try { return Session.getEffectiveUser().getEmail() || 'ที่ใช้รันสคริปต์'; } catch (x) { return 'ที่ใช้รันสคริปต์'; } }
 
 /** สร้างไฟล์ต้นทาง + ไฟล์แสดงผลของปีงบ (ใช้ตอนนำเข้าข้อมูลปีงบย้อนหลัง) */
 function createYearFiles_(fy) {
