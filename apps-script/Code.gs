@@ -4,14 +4,16 @@
  * วางไฟล์นี้ใน Apps Script ของไฟล์ "รวมภารกิจต่างประเทศ ปีงบ70_ต้นทาง"
  * (Extensions > Apps Script) แล้วรัน setup() หนึ่งครั้ง จากนั้น Deploy เป็น Web app
  *
- * - ข้อมูลจริงเก็บในไฟล์ "ต้นทาง" (แท็บ missions, logs, snapshots)
+ * - แต่ละปีงบมีไฟล์ "ต้นทาง" ของตัวเอง (แท็บ missions, logs, snapshots) และไฟล์ "แสดงผล" (แท็บชื่อเลขปีงบ)
+ * - ไฟล์ปีงบถัดไปวางลิงก์จากหน้าเว็บได้ (ปุ่ม "ไฟล์ข้อมูล") ไม่ต้องแก้โค้ด
  * - ไฟล์ "แสดงผล" ถูกวาดใหม่จากข้อมูลต้นทางหลังทุกการแก้ไข (อ่านอย่างเดียว)
  * - กด "บันทึกฉบับ" แล้วเก็บไฟล์ Excel ในโฟลเดอร์ Backup ไว้ 20 ไฟล์ล่าสุด
  */
 
 const CFG = {
+  FIRST_FY: 70,                                                   // ปีงบแรกที่ใช้ระบบ
   SOURCE_ID: '1-UUsKGb9GCHs0PkdQK9t9TfIU7NY9L8xSBG9zRbx9rE',      // รวมภารกิจต่างประเทศ ปีงบ70_ต้นทาง
-  DISPLAY_ID: '1TuvHy3uBUfKisQM6LfbwDW1F1s2du9D6NiDg1lQTkds',     // รวมภารกิจต่างประเทศ_แสดงผล
+  DISPLAY_ID: '1TuvHy3uBUfKisQM6LfbwDW1F1s2du9D6NiDg1lQTkds',     // รวมภารกิจต่างประเทศ_แสดงผล (ปีงบ70)
   BACKUP_FOLDER_ID: '1TCrfUJcOVO5Tu61eKnV3w_AYxYwHywp7',          // รวมภารกิจต่างประเทศ Backup
   DEFAULT_CODE: 'operation.slide',   // รหัสเปิดใช้งานเริ่มต้น (เปลี่ยนได้ด้วย setAccessCode)
   KEEP_BACKUPS: 20,
@@ -19,8 +21,7 @@ const CFG = {
   SESSION_SEC: 3600,                 // ใส่รหัสแล้วใช้ได้ 1 ชั่วโมง
   LOG_DAYS: 365,
   TZ: 'Asia/Bangkok',
-  TITLE: 'ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ 70',
-  DISPLAY_SHEET: '70',
+  TITLE: 'ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ ',
   BACKUP_TAG: 'ภารกิจต่างประเทศปี'   // ชื่อไฟล์ Backup ที่ระบบสร้าง มีคำนี้อยู่
 };
 
@@ -67,41 +68,47 @@ const API = {
   },
 
   // ส่งข้อมูลกลับเฉพาะเมื่อมีการเปลี่ยนแปลงหลังเวอร์ชันที่หน้าเว็บถืออยู่
+  // ไฟล์ทุกปีงบ + ภารกิจของทุกปีงบ (ไทม์ไลน์แสดงคร่อมปีงบได้)
   sync: function (r) {
-    const v = ver_(), out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0) };
-    if (Number(r.ver) !== v) out.missions = readMissions_();
+    const v = ver_(), files = files_();
+    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files };
+    if (Number(r.ver) !== v) {
+      out.missions = {};
+      Object.keys(files).forEach(function (fy) { try { out.missions[fy] = readMissions_(fy); } catch (x) { out.missions[fy] = []; } });
+    }
     return out;
   },
 
   write: function (r, s) {
     return withLock_(function () {
-      const map = {};
-      readMissions_().forEach(function (m) { map[m.id] = m; });
-      const logs = [];
-      let changed = false;
+      const maps = {}, logs = {}, dirty = {};
+      const mapOf = function (fy) { if (!maps[fy]) { maps[fy] = {}; readMissions_(fy).forEach(function (m) { maps[fy][m.id] = m; }); } return maps[fy]; };
       (r.ops || []).forEach(function (o) {
-        if (o.op === 'log') { logs.push(logRow_(o.data || {}, s.name)); return; }
+        const fy = fyArg_(o.fy || r.fy);
+        if (o.op === 'log') { (logs[fy] = logs[fy] || []).push(logRow_(o.data || {}, s.name)); return; }
+        const map = mapOf(fy);
         const id = String(o.id || '');
         if (!/^[A-Za-z0-9_\-]{1,60}$/.test(id)) throw err_('bad_id', 'รหัสภารกิจไม่ถูกต้อง');
         if (o.op === 'delete') delete map[id];
         else if (o.op === 'update') { if (map[id]) map[id] = merge_(map[id], o.data || {}); }
         else map[id] = Object.assign({}, o.data || {}, { id: id });
         if (map[id] && o.op !== 'delete') map[id].updatedByName = s.name;
-        changed = true;
+        dirty[fy] = 1;
       });
-      if (changed) writeMissions_(objValues_(map));
-      if (logs.length) appendLogs_(logs);
-      const v = changed ? bump_() : ver_();
-      return { ok: true, ver: v, missions: changed ? readMissions_() : undefined };
+      Object.keys(dirty).forEach(function (fy) { writeMissions_(fy, objValues_(maps[fy])); markDirty_(fy); });
+      Object.keys(logs).forEach(function (fy) { appendLogs_(fy, logs[fy]); });
+      const changed = Object.keys(dirty).length > 0;
+      return { ok: true, ver: changed ? bump_() : ver_() };
     });
   },
 
   save: function (r, s) {
     return withLock_(function () {
+      const fy = fyArg_(r.fy);
       const at = String(r.at || new Date().toISOString());
       const snap = { id: 'v' + Date.now(), at: at, label: String(r.label || '').slice(0, 120), by: s.name };
-      snapAppend_(snap, readMissions_());
-      snapPrune_();
+      snapAppend_(fy, snap, readMissions_(fy));
+      snapPrune_(fy);
       let file = null;
       if (r.xlsx) file = backupExcel_(String(r.filename || ('backup_' + Date.now())) + '.xlsx', r.xlsx);
       PropertiesService.getScriptProperties().setProperty('SNAP_AT', String(Date.now()));
@@ -109,19 +116,44 @@ const API = {
     });
   },
 
-  listSnaps: function () {
-    return { list: snapList_() };
+  listSnaps: function (r) {
+    return { list: snapList_(fyArg_(r.fy)) };
   },
 
   listLogs: function (r) {
-    return { list: logsList_(Math.min(1000, Number(r.limit) || 200)) };
+    return { list: logsList_(fyArg_(r.fy), Math.min(1000, Number(r.limit) || 200)) };
   },
 
   render: function () {
     const l = LockService.getScriptLock();
-    if (!l.tryLock(1000)) { setDirty_(true); return { ok: false, queued: true }; }
-    try { renderDisplay_(); } finally { l.releaseLock(); }
+    if (!l.tryLock(1000)) return { ok: false, queued: true };
+    try { renderDirty_(); } finally { l.releaseLock(); }
     return { ok: true };
+  },
+
+  // วางลิงก์ไฟล์ต้นทาง + ไฟล์แสดงผลของปีงบ (จากหน้าเว็บ)
+  setFiles: function (r, s) {
+    const fy = Number(r.fy);
+    if (!(fy >= CFG.FIRST_FY && fy <= CFG.FIRST_FY + 30)) throw err_('bad_fy', 'ปีงบไม่ถูกต้อง');
+    const src = idFromUrl_(r.src), disp = idFromUrl_(r.disp);
+    if (!src || !disp) throw err_('bad_link', 'ลิงก์ไม่ถูกต้อง วางลิงก์ Google Sheets ทั้ง 2 ไฟล์');
+    if (src === disp) throw err_('same_file', 'ไฟล์ต้นทางและไฟล์แสดงผลต้องเป็นคนละไฟล์');
+    const used = files_();
+    Object.keys(used).forEach(function (k) {
+      if (Number(k) !== fy && (used[k].src === src || used[k].disp === src || used[k].src === disp || used[k].disp === disp)) throw err_('in_use', 'ไฟล์นี้เป็นไฟล์ของปีงบ ' + k + ' อยู่แล้ว ใช้ไฟล์ใหม่สำหรับปีงบ ' + fy);
+    });
+    let a, b;
+    try { a = SpreadsheetApp.openById(src); } catch (x) { throw err_('no_access', 'เปิดไฟล์ต้นทางไม่ได้ ตรวจว่าบัญชีที่ Deploy สคริปต์มีสิทธิ์แก้ไขไฟล์นี้'); }
+    try { b = SpreadsheetApp.openById(disp); } catch (x) { throw err_('no_access', 'เปิดไฟล์แสดงผลไม่ได้ ตรวจว่าบัญชีที่ Deploy สคริปต์มีสิทธิ์แก้ไขไฟล์นี้'); }
+    return withLock_(function () {
+      const reg = JSON.parse(prop_('FILES') || '{}');
+      reg[fy] = { src: src, disp: disp, srcName: a.getName(), dispName: b.getName(), by: s.name, at: new Date().toISOString() };
+      PropertiesService.getScriptProperties().setProperty('FILES', JSON.stringify(reg));
+      sheet_(fy, 'missions', M_COLS); sheet_(fy, 'logs', LOG_HEAD); snapSheet_(fy);
+      appendLogs_(fy, [logRow_({ action: 'files', label: 'วางลิงก์ไฟล์ปีงบ ' + fy + ': ' + a.getName() + ' / ' + b.getName() }, s.name)]);
+      markDirty_(fy);
+      return { ok: true, files: files_(), ver: bump_() };
+    });
   }
 };
 
@@ -146,10 +178,8 @@ function ver_() { return Number(prop_('VER') || '1'); }
 function bump_() {
   const v = ver_() + 1;
   PropertiesService.getScriptProperties().setProperty('VER', String(v));
-  setDirty_(true);
   return v;
 }
-function setDirty_(on) { PropertiesService.getScriptProperties().setProperty('DISPLAY_DIRTY', on ? '1' : '0'); }
 function objValues_(o) { return Object.keys(o).map(function (k) { return o[k]; }); }
 function isObj_(v) { return v && typeof v === 'object' && !Array.isArray(v); }
 function merge_(a, b) {
@@ -158,9 +188,29 @@ function merge_(a, b) {
   return o;
 }
 
-function src_() { return SpreadsheetApp.openById(CFG.SOURCE_ID); }
-function sheet_(name, header) {
-  const ss = src_();
+function files_() {
+  const reg = JSON.parse(prop_('FILES') || '{}');
+  if (!reg[CFG.FIRST_FY]) reg[CFG.FIRST_FY] = { src: CFG.SOURCE_ID, disp: CFG.DISPLAY_ID };
+  return reg;
+}
+function fyArg_(v) {
+  const fy = String(Number(v) || CFG.FIRST_FY);
+  if (!files_()[fy]) throw err_('no_files', 'ยังไม่ได้วางลิงก์ไฟล์ของปีงบ ' + fy);
+  return fy;
+}
+function idFromUrl_(u) {
+  u = String(u || '').trim();
+  const m = u.match(/\/d\/([A-Za-z0-9_-]{20,})/) || u.match(/^([A-Za-z0-9_-]{25,})$/);
+  return m ? m[1] : '';
+}
+function markDirty_(fy) {
+  const d = JSON.parse(prop_('DIRTY_FYS') || '[]');
+  if (d.indexOf(String(fy)) < 0) d.push(String(fy));
+  PropertiesService.getScriptProperties().setProperty('DIRTY_FYS', JSON.stringify(d));
+}
+function src_(fy) { return SpreadsheetApp.openById(files_()[fy].src); }
+function sheet_(fy, name, header) {
+  const ss = src_(fy);
   let sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
@@ -179,11 +229,11 @@ function rewrite_(sh, rows) {
 
 /* =========================== missions (แท็บ missions ในไฟล์ต้นทาง) =========================== */
 
-function readMissions_() {
-  const cache = CacheService.getScriptCache(), key = 'missions:' + ver_();
+function readMissions_(fy) {
+  const cache = CacheService.getScriptCache(), key = 'missions:' + fy + ':' + ver_();
   const hit = cache.get(key);
   if (hit) return JSON.parse(hit);
-  const vals = sheet_('missions', M_COLS).getDataRange().getValues();
+  const vals = sheet_(fy, 'missions', M_COLS).getDataRange().getValues();
   const head = vals[0].map(String), out = [];
   for (let i = 1; i < vals.length; i++) {
     const row = vals[i], o = {};
@@ -204,7 +254,7 @@ function readMissions_() {
   return out;
 }
 
-function writeMissions_(list) {
+function writeMissions_(fy, list) {
   list.sort(function (a, b) { return (Number(a.order) || 1e6) - (Number(b.order) || 1e6) || String(a.id).localeCompare(String(b.id)); });
   const rows = [M_COLS].concat(list.map(function (m) {
     const extra = {};
@@ -217,7 +267,7 @@ function writeMissions_(list) {
       return v == null ? '' : String(v);
     });
   }));
-  rewrite_(sheet_('missions', M_COLS), rows);
+  rewrite_(sheet_(fy, 'missions', M_COLS), rows);
 }
 
 /* =========================== logs =========================== */
@@ -229,12 +279,12 @@ function logRow_(d, name) {
   const detail = [d.field || '', d.from != null ? String(d.from) : '', d.to != null ? '→ ' + String(d.to) : '', d.label || ''].filter(String).join(' ');
   return [String(at), Utilities.formatDate(new Date(at), CFG.TZ, 'yyyy-MM-dd HH:mm:ss'), name, String(d.action || ''), String(d.mission || ''), detail.slice(0, 500), JSON.stringify(e).slice(0, 4000)];
 }
-function appendLogs_(rows) {
-  const sh = sheet_('logs', LOG_HEAD);
+function appendLogs_(fy, rows) {
+  const sh = sheet_(fy, 'logs', LOG_HEAD);
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, LOG_HEAD.length).setNumberFormat('@').setValues(rows);
 }
-function logsList_(n) {
-  const sh = sheet_('logs', LOG_HEAD);
+function logsList_(fy, n) {
+  const sh = sheet_(fy, 'logs', LOG_HEAD);
   const last = sh.getLastRow(); if (last < 2) return [];
   const from = Math.max(2, last - n + 1);
   return sh.getRange(from, 1, last - from + 1, LOG_HEAD.length).getValues().reverse().map(function (r, i) {
@@ -244,41 +294,43 @@ function logsList_(n) {
   });
 }
 function pruneLogs() {
-  const sh = sheet_('logs', LOG_HEAD);
-  const last = sh.getLastRow(); if (last < 2) return;
-  const lim = Date.now() - CFG.LOG_DAYS * 864e5;
-  const col = sh.getRange(2, 1, last - 1, 1).getValues();
-  let n = 0; while (n < col.length && Number(col[n][0]) < lim) n++;
-  if (n) sh.deleteRows(2, n);
+  Object.keys(files_()).forEach(function (fy) {
+    const sh = sheet_(fy, 'logs', LOG_HEAD);
+    const last = sh.getLastRow(); if (last < 2) return;
+    const lim = Date.now() - CFG.LOG_DAYS * 864e5;
+    const col = sh.getRange(2, 1, last - 1, 1).getValues();
+    let n = 0; while (n < col.length && Number(col[n][0]) < lim) n++;
+    if (n) sh.deleteRows(2, n);
+  });
 }
 
 /* =========================== snapshots (ฉบับที่บันทึก) =========================== */
 
 const CHUNK = 45000;
-function snapSheet_() { return sheet_('snapshots', SNAP_HEAD); }
-function snapAppend_(meta, rows) {
-  const sh = snapSheet_();
+function snapSheet_(fy) { return sheet_(fy, 'snapshots', SNAP_HEAD); }
+function snapAppend_(fy, meta, rows) {
+  const sh = snapSheet_(fy);
   const js = JSON.stringify(rows), parts = [];
   for (let i = 0; i < js.length; i += CHUNK) parts.push(js.slice(i, i + CHUNK));
   const row = [meta.id, meta.at, meta.label, meta.by].concat(parts);
   if (sh.getMaxColumns() < row.length) sh.insertColumnsAfter(sh.getMaxColumns(), row.length - sh.getMaxColumns());
   sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setNumberFormat('@').setValues([row]);
 }
-function snapRows_() {
-  const sh = snapSheet_(); const last = sh.getLastRow(); if (last < 2) return [];
+function snapRows_(fy) {
+  const sh = snapSheet_(fy); const last = sh.getLastRow(); if (last < 2) return [];
   return sh.getRange(2, 1, last - 1, Math.max(5, sh.getLastColumn())).getValues()
     .map(function (r, i) { return { row: i + 2, r: r }; })
     .sort(function (a, b) { return String(b.r[1]).localeCompare(String(a.r[1])); });
 }
-function snapList_() {
-  return snapRows_().slice(0, CFG.KEEP_SNAPS).map(function (x) {
+function snapList_(fy) {
+  return snapRows_(fy).slice(0, CFG.KEEP_SNAPS).map(function (x) {
     let rows = []; try { rows = JSON.parse(x.r.slice(4).join('')); } catch (e) { }
     return { id: String(x.r[0]), at: String(x.r[1]), label: String(x.r[2]), byName: String(x.r[3]), rows: rows };
   });
 }
-function snapPrune_() {
-  const sh = snapSheet_();
-  snapRows_().slice(CFG.KEEP_SNAPS).map(function (x) { return x.row; }).sort(function (a, b) { return b - a; })
+function snapPrune_(fy) {
+  const sh = snapSheet_(fy);
+  snapRows_(fy).slice(CFG.KEEP_SNAPS).map(function (x) { return x.row; }).sort(function (a, b) { return b - a; })
     .forEach(function (r) { sh.deleteRow(r); });
 }
 
@@ -330,20 +382,29 @@ function dateParts_(r) {
 function gsz_(pt) { return Math.max(6, Math.round((Number(pt) || 14) * 0.75)); }
 
 function renderIfDirty() {
-  if (prop_('DISPLAY_DIRTY') !== '1') return;
+  if ((prop_('DIRTY_FYS') || '[]') === '[]') return;
   const l = LockService.getScriptLock();
   if (!l.tryLock(5000)) return;
-  try { renderDisplay_(); } finally { l.releaseLock(); }
+  try { renderDirty_(); } finally { l.releaseLock(); }
 }
-function renderNow() { const l = LockService.getScriptLock(); if (!l.tryLock(20000)) return; try { renderDisplay_(); } finally { l.releaseLock(); } }
+function renderDirty_() {
+  const d = JSON.parse(prop_('DIRTY_FYS') || '[]');
+  PropertiesService.getScriptProperties().setProperty('DIRTY_FYS', '[]');
+  d.forEach(function (fy) { if (files_()[fy]) renderDisplay_(fy); });
+}
+/** วาดไฟล์แสดงผลของทุกปีงบใหม่ทันที */
+function renderNow() {
+  const l = LockService.getScriptLock(); if (!l.tryLock(20000)) return;
+  try { Object.keys(files_()).forEach(function (fy) { renderDisplay_(fy); }); } finally { l.releaseLock(); }
+}
 
-function renderDisplay_() {
-  setDirty_(false);
-  const list = readMissions_().slice().sort(function (a, b) { return (Number(a.order) || Number(a.no) || 1e6) - (Number(b.order) || Number(b.no) || 1e6) || String(a.id).localeCompare(String(b.id)); });
+function renderDisplay_(fy) {
+  fy = String(fy);
+  const list = readMissions_(fy).slice().sort(function (a, b) { return (Number(a.order) || Number(a.no) || 1e6) - (Number(b.order) || Number(b.no) || 1e6) || String(a.id).localeCompare(String(b.id)); });
   const C = PCOLS.length, R = list.length + 5;
-  const ss = SpreadsheetApp.openById(CFG.DISPLAY_ID);
-  let sh = ss.getSheetByName(CFG.DISPLAY_SHEET);
-  if (!sh) { const first = ss.getSheets()[0]; if (ss.getSheets().length === 1 && first.getLastRow() === 0) sh = first.setName(CFG.DISPLAY_SHEET); else sh = ss.insertSheet(CFG.DISPLAY_SHEET, 0); }
+  const ss = SpreadsheetApp.openById(files_()[fy].disp);
+  let sh = ss.getSheetByName(fy);
+  if (!sh) { const first = ss.getSheets()[0]; if (ss.getSheets().length === 1 && first.getLastRow() === 0) sh = first.setName(fy); else sh = ss.insertSheet(fy, 0); }
   if (sh.getMaxRows() < R) sh.insertRowsAfter(sh.getMaxRows(), R - sh.getMaxRows());
   if (sh.getMaxColumns() < C) sh.insertColumnsAfter(sh.getMaxColumns(), C - sh.getMaxColumns());
   const all = sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns());
@@ -353,7 +414,7 @@ function renderDisplay_() {
   const vals = [], bgs = [], fcs = [], fws = [], fss = [], szs = [], heights = [];
   function pushRow(v, bg, fc, fw, fs, sz) { vals.push(v); bgs.push(bg); fcs.push(fc); fws.push(fw); fss.push(fs); szs.push(sz); }
   const blank = function (x) { return PCOLS.map(function () { return x; }); };
-  pushRow([CFG.TITLE].concat(blank('').slice(1)), blank(null), blank('#000000'), blank('bold'), blank('normal'), blank(gsz_(16))); heights.push(30);
+  pushRow([CFG.TITLE + fy].concat(blank('').slice(1)), blank(null), blank('#000000'), blank('bold'), blank('normal'), blank(gsz_(16))); heights.push(30);
   pushRow(blank(''), blank(null), blank('#000000'), blank('normal'), blank('normal'), blank(gsz_(14))); heights.push(8);
   pushRow(PHEAD.slice(), blank('#A6A6A6'), blank('#000000'), blank('bold'), blank('normal'), blank(gsz_(14))); heights.push(40);
   const rich = [];
@@ -407,14 +468,15 @@ function renderDisplay_() {
 
 /** รันครั้งเดียวหลังวางโค้ด: สร้างแท็บ ตั้งรหัสเริ่มต้น ตั้งตัวตั้งเวลา และวาดไฟล์แสดงผล */
 function setup() {
-  sheet_('missions', M_COLS); sheet_('logs', LOG_HEAD); snapSheet_();
+  const fy = String(CFG.FIRST_FY);
+  sheet_(fy, 'missions', M_COLS); sheet_(fy, 'logs', LOG_HEAD); snapSheet_(fy);
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty('CODE_HASH')) p.setProperty('CODE_HASH', sha256_(CFG.DEFAULT_CODE));
   if (!p.getProperty('VER')) p.setProperty('VER', '1');
   // ติดตั้งครั้งแรก: นำข้อมูลจาก Seed.gs (ถ้าเพิ่มไฟล์นั้นไว้) ลงไฟล์ต้นทางที่ยังว่าง
-  if (typeof SEED !== 'undefined' && !readMissions_().length) {
-    writeMissions_(SEED.missions || []);
-    appendLogs_([logRow_({ action: 'import', label: 'นำเข้าข้อมูลเริ่มต้น ' + (SEED.missions || []).length + ' ภารกิจ' }, 'ระบบ')]);
+  if (typeof SEED !== 'undefined' && !readMissions_(fy).length) {
+    writeMissions_(fy, SEED.missions || []);
+    appendLogs_(fy, [logRow_({ action: 'import', label: 'นำเข้าข้อมูลเริ่มต้น ' + (SEED.missions || []).length + ' ภารกิจ' }, 'ระบบ')]);
     Logger.log('นำเข้าข้อมูลเริ่มต้น ' + (SEED.missions || []).length + ' ภารกิจ');
   }
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
@@ -422,7 +484,7 @@ function setup() {
   ScriptApp.newTrigger('pruneLogs').timeBased().atHour(2).everyDays(1).inTimezone(CFG.TZ).create();
   DriveApp.getFolderById(CFG.BACKUP_FOLDER_ID).getName(); // ขอสิทธิ์ Drive ตอนนี้
   bump_();
-  renderDisplay_();
+  renderDisplay_(fy);
   Logger.log('ตั้งค่าเสร็จแล้ว');
 }
 

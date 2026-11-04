@@ -359,6 +359,16 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .lockbox .lbl{text-align:left;font-size:12.5px;color:var(--muted);margin:4px 0 -4px}
 .lockerr{min-height:1.2em;color:var(--danger);font-size:13px}
 .lockbtn{font-size:12.5px;padding:4px 10px}
+.fybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:#FFF4D6;color:#5A3B00;border:1px solid #E8B64C;border-radius:8px;padding:9px 12px;font-size:13.5px}
+.fybar span{flex:1;min-width:14em}
+.fybar.red{background:#FDE8E8;color:#7A1A1A;border-color:#E59A9A}
+.fysel select{font:inherit;font-weight:700;border:1px solid var(--line);border-radius:6px;padding:1px 4px;background:var(--panel);color:var(--fg)}
+.fyh{margin:6px 0 0;font-size:15px}
+.fyform{display:flex;flex-direction:column;gap:8px}
+.fyform label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.fyform input,.fyform select{font:inherit;font-size:14px;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.fyform select{align-self:flex-start}
+.snap .meta a{color:var(--accent)}
 </style>
 
 <div class="lock" id="lock" hidden>
@@ -376,9 +386,10 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 </div>
 <div class="wrap" id="app">
   <div class="appbar">
-    <h1>ภารกิจต่างประเทศ ฝูง.602 บน.6 · ปีงบประมาณ 70</h1>
-    <span class="who" id="who"></span><button type="button" class="lockbtn" id="lockBtn" title="ล็อกหน้าจอ">ล็อก</button>
+    <h1 id="appTitle">ภารกิจต่างประเทศ ฝูง.602 บน.6 · ปีงบประมาณ 70</h1>
+    <span class="who" id="who"></span><button type="button" class="lockbtn" id="filesBtn" hidden title="ลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของแต่ละปีงบ">ไฟล์ข้อมูล</button><button type="button" class="lockbtn" id="lockBtn" title="ล็อกหน้าจอ">ล็อก</button>
   </div>
+  <div class="fybar" id="fyBar" hidden role="status"></div>
   <div class="ribbon" id="ribbon"></div>
   <div class="sumbar" id="sumbar"><span class="stat">กำลังโหลดข้อมูล…</span></div>
 
@@ -395,7 +406,7 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
     <div class="cards" id="cards" hidden></div>
     <div class="sheetScroll" id="sheetBox">
       <div class="sheet">
-        <div class="stitle">ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ 70</div>
+        <div class="stitle" id="sTitle">ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ 70</div>
         <table class="grid" id="grid">
           <thead><tr>
             <th class="gut">ลำดับ</th><th style="min-width:46px">NO</th><th style="min-width:120px">CALLSIGN</th><th style="min-width:170px">MISSION</th><th style="min-width:250px">เส้นทางบิน</th><th style="min-width:92px">AIRCRAFT</th><th style="min-width:100px">STBY AIRCRAFT</th><th style="min-width:72px">PAX</th><th style="min-width:120px">ผู้รับผิดชอบ</th><th style="min-width:150px">วันปฏิบัติภารกิจ</th><th style="min-width:160px">ผลความก้าวหน้า</th><th class="xcol" style="min-width:170px">หมายเหตุ</th><th class="xcol"></th>
@@ -475,7 +486,7 @@ const IC = {
 const TBC_COLORS = ['FF0000', 'C00000', '000000', '0070C0', '00B050', 'FFC000', '7030A0'];
 const PALETTE = ['000000', '595959', '7F7F7F', 'C00000', 'FF0000', 'FFC000', 'FFFF00', '92D050', '00B050', '00B0F0', '0070C0', '002060', '7030A0', 'FFFFFF', 'D9D9D9', 'F2F2F2', 'F8CBAD', 'FCE4D6', 'FFF2CC', 'E2EFDA', 'DDEBF7'];
 
-const S = { rows: [], loaded: false, canWrite: false, edit: false, view: 'sheet', filter: 'all', q: '', versions: [], logs: [], logsOn: false, logsLoaded: false, me: null, names: {}, saving: 0, lastSave: null, err: false, pendingFocus: null, armDel: null, panel: null, armRestore: null, sel: null, scope: 'cell', dbChecked: false };
+const S = { fy: 70, allRows: [], rows: [], loaded: false, canWrite: false, edit: false, view: 'sheet', filter: 'all', q: '', versions: [], logs: [], logsOn: false, logsLoaded: false, me: null, names: {}, saving: 0, lastSave: null, err: false, pendingFocus: null, armDel: null, panel: null, armRestore: null, sel: null, scope: 'cell', dbChecked: false };
 let db = null, user = null, downloads = null;
 
 // ---------- order & position ----------
@@ -762,8 +773,10 @@ function renderSummary() {
   const c = { done: 0, pending: 0, cancelled: 0, moved: 0 }; S.rows.forEach((r) => c[group(r.status)]++);
   const today = new Date().toISOString().slice(0, 10);
   const nx = S.rows.filter((r) => group(r.status) === 'pending' && r.start && r.start >= today).sort((a, b) => a.start.localeCompare(b.start))[0];
-  const [fa, fb] = fyRange(SHEET_FY), fd = (iso) => { const d = pd(iso); return `${d.getUTCDate()} ${TH_M[d.getUTCMonth()]}${yy(d)}`; };
-  el.innerHTML = `<span class="stat"><b>ปีงบ ${SHEET_FY}</b> (${fd(fa)} – ${fd(fb)}) ·</span><span class="stat">ทั้งหมด <b>${S.rows.length}</b> ภารกิจ</span><span class="stat"><i class="dot done"></i>เรียบร้อย <b>${c.done}</b></span><span class="stat"><i class="dot pending"></i>รอยืนยัน <b>${c.pending}</b></span><span class="stat"><i class="dot cancelled"></i>ยกเลิก <b>${c.cancelled}</b></span><span class="stat"><i class="dot moved"></i>เลื่อน <b>${c.moved}</b></span>` +
+  const [fa, fb] = fyRange(S.fy), fd = (iso) => { const d = pd(iso); return `${d.getUTCDate()} ${TH_M[d.getUTCMonth()]}${yy(d)}`; };
+  const fys = fyList();
+  const fyHtml = fys.length > 1 ? `<label class="fysel">ปีงบ <select id="fySel" aria-label="เลือกปีงบที่แสดงในตาราง">${fys.map((f) => `<option value="${f}"${f === S.fy ? ' selected' : ''}>${f}</option>`).join('')}</select></label>` : `<b>ปีงบ ${S.fy}</b>`;
+  el.innerHTML = `<span class="stat">${fyHtml} (${fd(fa)} – ${fd(fb)}) ·</span><span class="stat">ทั้งหมด <b>${S.rows.length}</b> ภารกิจ</span><span class="stat"><i class="dot done"></i>เรียบร้อย <b>${c.done}</b></span><span class="stat"><i class="dot pending"></i>รอยืนยัน <b>${c.pending}</b></span><span class="stat"><i class="dot cancelled"></i>ยกเลิก <b>${c.cancelled}</b></span><span class="stat"><i class="dot moved"></i>เลื่อน <b>${c.moved}</b></span>` +
     (nx ? `<span class="nextm">· ภารกิจถัดไป <b>${esc(nx.mission || nx.callsign)}</b> ${esc(nx.route || '')} วันที่ <b>${esc(datesInline(nx))}</b>${nx.dateTbc ? ' ' + TBC : ''}</span>` : '');
 }
 
@@ -881,6 +894,9 @@ function fillEditRow(tr, r, pos) {
 function renderSheet() {
   const tbody = $('#rows'); const rows = sorted(S.rows); const shown = rows.filter(visible);
   POS = new Map(rows.map((r, i) => [r.id, i + 1]));
+  // missions of other fiscal years (timeline only) are labelled "ปีงบ/ลำดับ", e.g. 71/3
+  const others = {}; S.allRows.forEach((r) => { if (r._fy != null && r._fy !== S.fy) (others[r._fy] = others[r._fy] || []).push(r); });
+  Object.keys(others).forEach((fy) => sorted(others[fy]).forEach((r, i) => POS.set(r.id, `${fy}/${i + 1}`)));
   const phone = isPhone();
   $('#cards').hidden = !phone; $('#sheetBox').hidden = phone;
   $('#fitBtn').classList.toggle('on', S.fit);
@@ -957,8 +973,8 @@ function addRow(afterId) {
   const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const doc = { order: at + 0.5, callsign: '', mission: '', route: '', aircraft: 'A320', stby_aircraft: '', pax: '', owner: '', dates: '', ranges: [], dateTbc: false, start: '', end: '', status: 'รอยืนยันภารกิจ', note: '', fmt: {}, updatedAt: new Date().toISOString(), updatedBy: S.me || '' };
   resetFilters(); S.view = 'sheet'; S.pendingFocus = id;
-  S.rows.push({ id, ...doc }); ids.splice(at, 0, id);
-  write(id, () => db.doc('missions/' + id).set(doc)).then(() => { applyOrder(ids); log({ action: 'add', mid: id, no: at + 1, mission: '' }); toast(afterId ? `แทรกภารกิจที่ ${at + 1} แล้ว` : `เพิ่มภารกิจที่ ${at + 1} แล้ว`); }).catch(() => { S.rows = S.rows.filter((r) => r.id !== id); renderAll(); });
+  const nr = { id, ...doc, _fy: S.fy }; S.allRows.push(nr); S.rows.push(nr); ids.splice(at, 0, id);
+  write(id, () => db.doc('missions/' + id).set(doc)).then(() => { applyOrder(ids); log({ action: 'add', mid: id, no: at + 1, mission: '' }); toast(afterId ? `แทรกภารกิจที่ ${at + 1} แล้ว` : `เพิ่มภารกิจที่ ${at + 1} แล้ว`); }).catch(() => { S.allRows = S.allRows.filter((r) => r.id !== id); renderAll(); });
   renderAll();
 }
 $('#addRow').addEventListener('click', () => addRow(null));
@@ -966,6 +982,46 @@ $('#addRow').addEventListener('click', () => addRow(null));
 // ---------- timeline (day calendar) ----------
 // Fiscal year N (Thai year, 2 digits) runs 1 Oct of the year before to 30 Sep of year N, e.g. ปีงบ 70 = 1 ต.ค.69 – 30 ก.ย.70
 const SHEET_FY = 70;
+// ---------- fiscal-year files (GitHub version: links pasted from this page; claude.ai version: one year) ----------
+const FILES = () => (window.APP_FILES ? window.APP_FILES.files() : null);
+const fyList = () => { const f = FILES(); return f ? Object.keys(f).map(Number).sort((a, b) => a - b) : [S.fy]; };
+function splitRows() { S.rows = S.allRows.filter((r) => r._fy == null || r._fy === S.fy); }
+function setFy(fy) {
+  if (fy === S.fy && S.fyChosen) return;
+  S.fy = fy; S.fyChosen = true; S.versions = []; S.logs = []; S.logsLoaded = false;
+  if (window.APP_FILES) window.APP_FILES.setFy(fy);
+  renderAll();
+}
+function defaultFy() {
+  const f = fyList(), cur = fyNow();
+  if (f.includes(cur)) return cur;
+  const past = f.filter((x) => x < cur); return past.length ? past[past.length - 1] : f[0];
+}
+function renderTitles() {
+  $('#appTitle').textContent = `ภารกิจต่างประเทศ ฝูง.602 บน.6 · ปีงบประมาณ ${S.fy}`;
+  $('#sTitle').textContent = titleOf();
+  $('#filesBtn').hidden = !FILES();
+}
+// Reminder: from 1 Aug until next year's links are pasted; red on 30 Sep, and after 1 Oct if still missing
+function renderFyBar() {
+  const bar = $('#fyBar'), F = FILES();
+  if (!F || !S.loginName) { bar.hidden = true; return; }
+  const now = new Date(Date.now() + 7 * 3600e3), cur = fyNow(), m = now.getUTCMonth();
+  let msg = '', red = false, need = 0;
+  if (!F[cur]) { need = cur; red = true; msg = `ขึ้นปีงบ ${cur} แล้ว แต่ยังไม่ได้วางลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของปีงบ ${cur} · ตอนนี้ภารกิจที่เพิ่มจะบันทึกลงไฟล์ปีงบ ${S.fy}`; }
+  else if ((m === 7 || m === 8) && !F[cur + 1]) {
+    need = cur + 1;
+    const oct1 = Date.UTC(now.getUTCFullYear(), 9, 1), today = Date.UTC(now.getUTCFullYear(), m, now.getUTCDate());
+    const days = Math.round((oct1 - today) / 864e5); red = days <= 1;
+    msg = `อีก ${days} วันจะขึ้นปีงบ ${cur + 1} (1 ต.ค.${String((now.getUTCFullYear() + 543) % 100).padStart(2, '0')}) · วางลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของปีงบ ${cur + 1} ไว้ก่อน ระบบจะเริ่มใช้ไฟล์ใหม่เองวันที่ 1 ต.ค.`;
+  }
+  bar.hidden = !msg; if (!msg) return;
+  bar.className = 'fybar' + (red ? ' red' : '');
+  bar.innerHTML = `<span>${esc(msg)}</span><button type="button" class="${red ? 'danger arm' : 'primary'}" id="fyGo">วางลิงก์ปีงบ ${need}</button>`;
+  $('#fyGo').addEventListener('click', () => { S.filesFy = need; openPanel('files'); });
+}
+window.addEventListener('app-files', () => { if (!S.fyChosen) setFy(defaultFy()); else renderAll(); });
+document.addEventListener('change', (e) => { if (e.target && e.target.id === 'fySel') setFy(Number(e.target.value)); });
 const fyNow = () => { const d = new Date(Date.now() + 7 * 3600e3); return (d.getUTCFullYear() + 543 + (d.getUTCMonth() >= 9 ? 1 : 0)) % 100; };
 const fyRange = (n) => { const ce = 2500 + n - 543; return [`${ce - 1}-10-01`, `${ce}-09-30`]; };
 // Official holidays (shown grey like weekends; the name shows on hover or tap). Add next year's list here.
@@ -1018,7 +1074,7 @@ function tlWindow() {
 const spanOf = (r) => { const rs = rangesOf(r); if (!rs.length) return null; const a = rs.map((x) => x.s).sort()[0], b = rs.map((x) => x.e || x.s).sort().pop(); return [a, b]; };
 // Missions that use the same aircraft type on overlapping days (cancelled / postponed ignored)
 function findClashes() {
-  const live = S.rows.filter((r) => !isRed(r.status) && acKey(r) && acKey(r) !== '-' && rangesOf(r).length);
+  const live = S.allRows.filter((r) => !isRed(r.status) && acKey(r) && acKey(r) !== '-' && rangesOf(r).length);
   const out = [];
   for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
     const a = live[i], b = live[j]; if (acKey(a) !== acKey(b)) continue;
@@ -1064,9 +1120,9 @@ function renderTimeline(pr) {
   }
   if (todayIso >= isoDay(w0) && todayIso <= isoDay(w1)) bg += `<i class="td" style="left:${X(todayIso)}px;width:${dw}px"></i>`;
   // rows
-  const vis = sorted(S.rows).filter((r) => (S.tl.showRed || !isRed(r.status)) && rangesOf(r).some(inWin));
-  const hiddenOut = sorted(S.rows).filter((r) => (S.tl.showRed || !isRed(r.status)) && rangesOf(r).length && !rangesOf(r).some(inWin)).length;
-  const noDate = S.rows.filter((r) => !rangesOf(r).length).length;
+  const vis = sorted(S.allRows).filter((r) => (S.tl.showRed || !isRed(r.status)) && rangesOf(r).some(inWin));
+  const hiddenOut = sorted(S.allRows).filter((r) => (S.tl.showRed || !isRed(r.status)) && rangesOf(r).length && !rangesOf(r).some(inWin)).length;
+  const noDate = S.allRows.filter((r) => !rangesOf(r).length).length;
   const barsFor = (r, label0) => {
     const all = rangesOf(r), multi = all.length > 1, clash = clashIds.has(r.id);
     const label = label0 + altSuf(r) + (r.dateTbc ? ' ' + TBC : '');
@@ -1130,7 +1186,7 @@ function renderTimeline(pr) {
   const notes = [];
   if (hiddenOut) notes.push(`อีก ${hiddenOut} ภารกิจอยู่นอกช่วงที่แสดง`);
   if (noDate) notes.push(`${noDate} ภารกิจยังไม่ได้เลือกวัน`);
-  if (!S.tl.showRed) { const n = S.rows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
+  if (!S.tl.showRed) { const n = S.allRows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
   notes.push('พื้นเทาคือวันเสาร์-อาทิตย์ · คลิกแถบเพื่อดูรายละเอียด');
   $('#tlNote').textContent = notes.join(' · ');
   // keep today in view the first time
@@ -1149,7 +1205,7 @@ function openCard(anchor, r) {
   $('#cardGo', p).addEventListener('click', () => { closePop(); S.view = 'sheet'; resetFilters(); S.flash = { id: r.id, until: Date.now() + 5000 }; renderAll(); const tr = isPhone() ? $(`#cards .mcard[data-id="${r.id}"]`) : $(`#rows tr[data-id="${r.id}"]`); if (tr) tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); clearTimeout(S.flashT); S.flashT = setTimeout(() => { S.flash = null; $$('.flash').forEach((x) => x.classList.remove('flash')); }, 5000); });
   $('#cardClose', p).focus();
 }
-$('#cal').addEventListener('click', (e) => { const b = e.target.closest('.cbar'); if (!b) return; const r = S.rows.find((x) => x.id === b.dataset.id); if (r) openCard(b, r); });
+$('#cal').addEventListener('click', (e) => { const b = e.target.closest('.cbar'); if (!b) return; const r = S.allRows.find((x) => x.id === b.dataset.id); if (r) openCard(b, r); });
 $('#tlPrev').addEventListener('click', () => { if (S.tl.span === 'fy') { S.tl.fy -= 1; refreshTl(); return; } const [w0] = tlWindow(); S.tl.m0 = new Date(Date.UTC(w0.getUTCFullYear(), w0.getUTCMonth() - 1, 1)); refreshTl(); });
 $('#tlNext').addEventListener('click', () => { if (S.tl.span === 'fy') { S.tl.fy += 1; refreshTl(); return; } const [w0] = tlWindow(); S.tl.m0 = new Date(Date.UTC(w0.getUTCFullYear(), w0.getUTCMonth() + 1, 1)); refreshTl(); });
 $('#tlNow').addEventListener('click', () => { S.tl.m0 = null; S.tl.span = '3'; S.tl.fy = fyNow(); S.tl.scrolled = false; refreshTl(); });
@@ -1164,7 +1220,7 @@ function renderMonthCal(w0, w1) {
   const cal = $('#cal'), box = $('#calBox');
   const todayIso = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
   const clashes = findClashes(), clashIds = new Set(clashes.flatMap((c) => [c.a.id, c.b.id]));
-  const vis = sorted(S.rows).filter((r) => (S.tl.showRed || !isRed(r.status)) && rangesOf(r).length);
+  const vis = sorted(S.allRows).filter((r) => (S.tl.showRed || !isRed(r.status)) && rangesOf(r).length);
   let h = '<div class="mcal">';
   let shown = new Set();
   for (let m = new Date(w0); m <= w1; m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1))) {
@@ -1215,16 +1271,16 @@ function renderMonthCal(w0, w1) {
   const warn = $('#tlWarn');
   if (clashes.length) { warn.hidden = false; warn.innerHTML = `<span>⚠</span><span><b>มีภารกิจใช้เครื่องแบบเดียวกันวันซ้อนกัน ${clashes.length} คู่</b> ตรวจว่ามีเครื่องพอหรือไม่: ` + clashes.slice(0, 6).map((c) => `${esc(c.ac)} ภารกิจที่ ${POS.get(c.a.id)} กับ ${POS.get(c.b.id)} (${esc(thaiRange(c.s, c.e))})`).join(' · ') + (clashes.length > 6 ? ' …' : '') + '</span>'; } else warn.hidden = true;
   const notes = [];
-  const noDate = S.rows.filter((r) => !rangesOf(r).length).length;
+  const noDate = S.allRows.filter((r) => !rangesOf(r).length).length;
   const out = vis.filter((r) => !shown.has(r.id)).length;
   if (out) notes.push(`อีก ${out} ภารกิจอยู่นอกช่วงที่แสดง`);
   if (noDate) notes.push(`${noDate} ภารกิจยังไม่ได้เลือกวัน`);
-  if (!S.tl.showRed) { const n = S.rows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
+  if (!S.tl.showRed) { const n = S.allRows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
   notes.push('คลิกภารกิจเพื่อดูรายละเอียด');
   $('#tlNote').textContent = notes.join(' · ');
   box.scrollLeft = 0;
 }
-$('#cal').addEventListener('click', (e) => { const b = e.target.closest('.mev,.ag-i'); if (!b) return; const r = S.rows.find((x) => x.id === b.dataset.id); if (r) openCard(b, r); });
+$('#cal').addEventListener('click', (e) => { const b = e.target.closest('.mev,.ag-i'); if (!b) return; const r = S.allRows.find((x) => x.id === b.dataset.id); if (r) openCard(b, r); });
 // ---------- phone: mission cards + edit form ----------
 function renderCards(shown) {
   const box = $('#cards');
@@ -1308,10 +1364,10 @@ function renderAgenda(w0, w1) {
   const cal = $('#cal');
   const todayIso = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
   const clashes = findClashes(), clashIds = new Set(clashes.flatMap((c) => [c.a.id, c.b.id]));
-  const vis = sorted(S.rows).filter((r) => S.tl.showRed || !isRed(r.status));
+  const vis = sorted(S.allRows).filter((r) => S.tl.showRed || !isRed(r.status));
   const items = [];
   vis.forEach((r) => rangesOf(r).forEach((x, idx) => { const e = x.e || x.s; if (e < isoDay(w0) || x.s > isoDay(w1)) return; items.push({ r, s: x.s, e, idx }); }));
-  items.sort((a, b) => a.s.localeCompare(b.s) || POS.get(a.r.id) - POS.get(b.r.id));
+  items.sort((a, b) => a.s.localeCompare(b.s) || String(POS.get(a.r.id)).localeCompare(String(POS.get(b.r.id)), undefined, { numeric: true }));
   let h = '<div class="agenda">';
   for (let m = new Date(w0); m <= w1; m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1))) {
     const y = m.getUTCFullYear(), mo = m.getUTCMonth(), ms = isoDay(m), me = isoDay(new Date(Date.UTC(y, mo + 1, 0)));
@@ -1335,9 +1391,9 @@ function renderAgenda(w0, w1) {
   cal.style.width = ''; cal.innerHTML = h;
   const warn = $('#tlWarn');
   if (clashes.length) { warn.hidden = false; warn.innerHTML = `<span>⚠</span><span><b>ใช้เครื่องแบบเดียวกันวันซ้อนกัน ${clashes.length} คู่:</b> ` + clashes.slice(0, 4).map((c) => `${esc(c.ac)} ภารกิจที่ ${POS.get(c.a.id)} กับ ${POS.get(c.b.id)} (${esc(thaiRange(c.s, c.e))})`).join(' · ') + '</span>'; } else warn.hidden = true;
-  const notes = []; const noDate = S.rows.filter((r) => !rangesOf(r).length).length;
+  const notes = []; const noDate = S.allRows.filter((r) => !rangesOf(r).length).length;
   if (noDate) notes.push(`${noDate} ภารกิจยังไม่ได้เลือกวัน`);
-  if (!S.tl.showRed) { const n = S.rows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
+  if (!S.tl.showRed) { const n = S.allRows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
   notes.push('แตะภารกิจเพื่อดูรายละเอียด');
   $('#tlNote').textContent = notes.join(' · ');
 }
@@ -1366,12 +1422,12 @@ addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if 
 // ---------- print sheet (shared by PREVIEW and PDF) ----------
 const PCOLS = [['no', 4.7], ['callsign', 14], ['mission', 19.9], ['route', 30.3], ['aircraft', 9], ['stby_aircraft', 9.6], ['pax', 9], ['owner', 11.5], ['dates', 14], ['status', 15.7]];
 const PHEAD = ['NO', 'CALLSIGN', 'MISSION', 'เส้นทางบิน', 'AIRCRAFT', 'STBY AIRCRAFT', 'PAX', 'ผู้รับผิดชอบ', 'วันปฏิบัติภารกิจ', 'ผลความก้าวหน้า'];
-const TITLE = 'ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ 70';
+const titleOf = () => 'ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ ' + S.fy;
 function footText(meta) { return `ข้อมูล ณ ${fmtTH(meta.at || new Date().toISOString())}${meta.label ? ' · ' + meta.label : ''}`; }
 function printSheetEl(rows, meta) {
   const sh = document.createElement('div'); sh.className = 'psheet';
   const tot = PCOLS.reduce((s, c) => s + c[1], 0);
-  let h = `<div class="ptitle">${esc(TITLE)}</div><table><colgroup>${PCOLS.map((c) => `<col style="width:${(c[1] / tot * 100).toFixed(3)}%">`).join('')}</colgroup><thead><tr>${PHEAD.map((t) => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>`;
+  let h = `<div class="ptitle">${esc(titleOf())}</div><table><colgroup>${PCOLS.map((c) => `<col style="width:${(c[1] / tot * 100).toFixed(3)}%">`).join('')}</colgroup><thead><tr>${PHEAD.map((t) => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>`;
   sorted(rows).forEach((r, i) => {
     const pos = i + 1, even = pos % 2 === 0;
     h += '<tr>' + PCOLS.map(([f]) => {
@@ -1391,7 +1447,7 @@ const tlTitle = () => { const [w0, w1] = tlWindow(); return `${S.tl.mode === 'ca
 function printTimelineEl(meta) {
   const wrap = document.createElement('div'); wrap.className = 'psheet ptl';
   wrap.style.cssText = '--bg:#EEF1F5;--fg:#16202E;--muted:#5B6878;--line:#C9D1DB;--panel:#FFFFFF;--danger:#C62828;--soft:#F4F6F9;--ok:#1E7A46;--warn:#A86A00;color:#16202E;background:#fff;font-family:var(--f-ui)';
-  const t = document.createElement('div'); t.className = 'ptitle'; t.style.fontFamily = 'var(--f-sheet)'; t.textContent = `${TITLE} · ${tlTitle()}`; wrap.append(t);
+  const t = document.createElement('div'); t.className = 'ptitle'; t.style.fontFamily = 'var(--f-sheet)'; t.textContent = `ภารกิจต่างประเทศ ฝูง.602 บน.6 · ${tlTitle()}`; wrap.append(t);
   let c;
   if (S.tl.mode === 'cal') { c = $('#cal').cloneNode(true); c.removeAttribute('id'); const mc = c.querySelector('.mcal'); if (mc) mc.style.zoom = ''; else { c = document.createElement('div'); const pv = S.tl.pv; S.tl.pv = 'grid'; const holder = $('#cal'); const keep = holder.innerHTML; renderMonthCal(...tlWindow()); c = holder.cloneNode(true); c.removeAttribute('id'); holder.innerHTML = keep; S.tl.pv = pv; } }
   else {
@@ -1505,7 +1561,7 @@ function buildXLSX(rows, meta) {
     return `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
   };
   const rowsXml = [];
-  rowsXml.push(`<row r="1" ht="24" customHeight="1">${cell('A1', TITLE, sTitle)}${PCOLS.slice(1).map((_, i) => `<c r="${colL(i + 1)}1" s="${sTitle}"/>`).join('')}</row>`);
+  rowsXml.push(`<row r="1" ht="24" customHeight="1">${cell('A1', titleOf(), sTitle)}${PCOLS.slice(1).map((_, i) => `<c r="${colL(i + 1)}1" s="${sTitle}"/>`).join('')}</row>`);
   rowsXml.push(`<row r="3" ht="38" customHeight="1">${PHEAD.map((h, i) => cell(colL(i) + '3', h, sHead)).join('')}</row>`);
   let rn = 4;
   sorted(rows).forEach((r, idx) => {
@@ -1535,7 +1591,7 @@ function buildXLSX(rows, meta) {
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="${borders.length}">${borders.join('')}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
   const cols = PCOLS.map(([, w], i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:J${footRow}"/><sheetViews><sheetView workbookViewId="0" zoomScale="100"/></sheetViews><sheetFormatPr defaultRowHeight="21" customHeight="1"/><cols>${cols}</cols><sheetData>${rowsXml.join('')}</sheetData><mergeCells count="1"><mergeCell ref="A1:J1"/></mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>`;
-  const wbx = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets><sheet name="70" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'70'!$A$1:$J$${footRow}</definedName></definedNames></workbook>`;
+  const wbx = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets><sheet name="${S.fy}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'${S.fy}'!$A$1:$J$${footRow}</definedName></definedNames></workbook>`;
   return zipStore({
     '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
     '_rels/.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
@@ -1571,7 +1627,7 @@ async function save(filename, blob) {
 const baseName = (meta) => {
   const d = meta.at ? new Date(meta.at) : new Date();
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map((x) => [x.type, x.value]));
-  return `${String((Number(p.year) + 543) % 100).padStart(2, '0')}${p.month}${p.day} ${p.hour}${p.minute}TH-LT ภารกิจต่างประเทศปี70`;
+  return `${String((Number(p.year) + 543) % 100).padStart(2, '0')}${p.month}${p.day} ${p.hour}${p.minute}TH-LT ภารกิจต่างประเทศปี${S.fy}`;
 };
 window.__om = { buildXLSX: (rows, meta) => buildXLSX(rows, meta), baseName: (meta) => baseName(meta) };
 async function exportXLS(rows, meta) { try { await save(baseName(meta) + '.xlsx', buildXLSX(rows, meta)); } catch (e) { toast('สร้างไฟล์ Excel ไม่สำเร็จ'); } }
@@ -1632,6 +1688,37 @@ function renderPanel() {
     if ($('#snapSave')) $('#snapSave').addEventListener('click', async () => { const ok = await saveVersion($('#snapName').value.trim()); if (ok && $('#snapName')) $('#snapName').value = ''; });
     $$('[data-pv]', p).forEach((b) => b.addEventListener('click', () => { const v = S.versions.find((x) => x.id === b.dataset.pv); if (v) openPreview(v.rows || [], { at: v.at, label: v.label || 'ฉบับ ' + fmtTH(v.at), stamp: stampOf(v.at) }); }));
     $$('[data-rs]', p).forEach((b) => b.addEventListener('click', () => { const id = b.dataset.rs; if (S.armRestore !== id) { S.armRestore = id; renderPanel(); return; } S.armRestore = null; restoreVersion(id); }));
+  } else if (S.panel === 'files') {
+    const F = FILES() || {}, cur = fyNow(), fys = fyList();
+    const target = S.filesFy || (F[cur] ? cur + 1 : cur);
+    const link = (id) => `https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/edit`;
+    let h = `<div class="phead"><h2>ไฟล์ข้อมูลแต่ละปีงบ</h2><button type="button" class="ghost" id="pClose">${IC.x}ปิด</button></div><p class="pdesc">แต่ละปีงบมีไฟล์ต้นทาง (ข้อมูลจริงที่หน้าเว็บอ่านและเขียน) และไฟล์แสดงผล (ตารางที่ระบบวาดให้ดู) ของตัวเอง ระบบเริ่มใช้ไฟล์ของปีงบใหม่เองวันที่ 1 ต.ค. ส่วนไทม์ไลน์และปฏิทินแสดงภารกิจของทุกปีงบรวมกัน</p><div class="snaps">`;
+    fys.slice().reverse().forEach((fy) => {
+      const f = F[fy] || {};
+      h += `<div class="snap"><span class="nm">ปีงบ ${fy}${fy === cur ? ' · ปีงบปัจจุบัน' : ''}</span><span class="meta"><a href="${link(f.src)}" target="_blank" rel="noopener">${esc(f.srcName || 'ไฟล์ต้นทาง')}</a><br><a href="${link(f.disp)}" target="_blank" rel="noopener">${esc(f.dispName || 'ไฟล์แสดงผล')}</a></span></div>`;
+    });
+    h += '</div>';
+    if (S.canWrite) {
+      const opts = [cur, cur + 1].filter((v, i, a) => a.indexOf(v) === i);
+      if (!opts.includes(target)) opts.push(target);
+      h += `<h3 class="fyh">วางลิงก์ไฟล์ของปีงบ</h3><p class="pdesc">สร้าง Google Sheets ว่าง 2 ไฟล์ เช่น <b>รวมภารกิจต่างประเทศ ปีงบ${target}_ต้นทาง</b> และ <b>รวมภารกิจต่างประเทศ ปีงบ${target}_แสดงผล</b> บัญชีที่ Deploy สคริปต์ต้องแก้ไขทั้ง 2 ไฟล์ได้ แล้ววางลิงก์ด้านล่าง</p>
+      <div class="fyform"><label>ปีงบ <select id="ffFy">${opts.sort().map((v) => `<option value="${v}"${v === target ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label>ลิงก์ไฟล์ต้นทาง<input id="ffSrc" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="${esc(S.ffSrc || '')}"></label>
+      <label>ลิงก์ไฟล์แสดงผล<input id="ffDisp" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="${esc(S.ffDisp || '')}"></label>
+      <div class="lockerr" id="ffErr" role="alert">${esc(S.ffErr || '')}</div>
+      <button type="button" class="primary" id="ffSave"${S.ffBusy ? ' disabled' : ''}>${S.ffBusy ? 'กำลังตรวจไฟล์…' : 'บันทึกลิงก์'}</button></div>`;
+    }
+    p.innerHTML = h;
+    const keep = () => { S.ffSrc = $('#ffSrc') ? $('#ffSrc').value : ''; S.ffDisp = $('#ffDisp') ? $('#ffDisp').value : ''; };
+    if ($('#ffFy')) $('#ffFy').addEventListener('change', (e) => { keep(); S.filesFy = Number(e.target.value); renderPanel(); });
+    if ($('#ffSave')) $('#ffSave').addEventListener('click', async () => {
+      keep(); const fy = Number($('#ffFy').value);
+      if (F[fy] && !S.ffArm) { S.ffArm = true; S.ffErr = `ปีงบ ${fy} มีลิงก์อยู่แล้ว กดบันทึกอีกครั้งเพื่อเปลี่ยนเป็นไฟล์ใหม่`; renderPanel(); return; }
+      S.ffArm = false; S.ffBusy = true; S.ffErr = ''; renderPanel();
+      try { await window.APP_FILES.set(fy, S.ffSrc, S.ffDisp); S.ffSrc = S.ffDisp = ''; S.filesFy = null; toast(`บันทึกลิงก์ไฟล์ปีงบ ${fy} แล้ว`); }
+      catch (e) { S.ffErr = (e && e.message) || 'บันทึกไม่สำเร็จ'; }
+      finally { S.ffBusy = false; renderPanel(); }
+    });
   } else if (S.panel === 'logs') {
     let h = `<div class="phead"><h2>ประวัติการแก้ไข</h2><button type="button" class="ghost" id="pClose">${IC.x}ปิด</button></div><p class="pdesc">ทุกการแก้ไขช่อง จัดรูปแบบ ย้ายแถว เพิ่ม ลบ บันทึกฉบับ และย้อนฉบับ แสดง 200 รายการล่าสุด ส่วนนี้ไม่แสดงใน PREVIEW, PDF และ Excel</p><div class="logs">`;
     if (!S.logsLoaded) h += '<div class="empty">กำลังโหลด…</div>';
@@ -1649,6 +1736,8 @@ function renderPanel() {
       else if (l.action === 'delete') act = 'ลบ ' + m;
       else if (l.action === 'version') { act = 'บันทึกฉบับ'; det = esc(l.label || ''); }
       else if (l.action === 'restore') { act = 'ย้อนแผนเป็นฉบับ'; det = esc(l.label || ''); }
+      else if (l.action === 'files') { act = 'วางลิงก์ไฟล์ปีงบ'; det = esc(l.label || ''); }
+      else if (l.action === 'import') { act = 'นำเข้าข้อมูลเริ่มต้น'; det = esc(l.label || ''); }
       h += `<div class="lg"><time>${tm}</time><span><span class="by">${esc(l.byName || nameOf(l.by))}</span> ${act}</span>${det ? `<span class="det">${det}</span>` : ''}</div>`;
     });
     h += '</div>'; p.innerHTML = h;
@@ -1688,6 +1777,7 @@ function subscribeLogs() {
 
 // ---------- boot ----------
 function renderAll() {
+  splitRows(); renderTitles(); renderFyBar();
   renderSheet(); renderRibbon(); renderSummary();
   $('#v-sheet').hidden = S.view !== 'sheet'; $('#v-tl').hidden = S.view !== 'tl';
   renderTimeline(); applyFit();
@@ -1732,6 +1822,7 @@ $('#lockForm').addEventListener('submit', async (ev) => {
   S.loginName = SESS.name; setWho(); showLock(false); renderAll();
 });
 $('#lockBtn').addEventListener('click', () => lockNow());
+$('#filesBtn').addEventListener('click', () => { S.filesFy = null; S.ffErr = ''; openPanel('files'); });
 setInterval(() => { if (SESS && SESS.exp <= Date.now()) lockNow('ครบ 1 ชั่วโมง กรุณาใส่รหัสใหม่'); }, 5000);
 if (SESS && AUTH && !AUTH.valid()) SESS = null;
 window.addEventListener('app-auth-lost', () => { if (SESS) lockNow('หมดเวลาใช้งาน กรุณาใส่รหัสใหม่'); });
@@ -1751,8 +1842,8 @@ S.loginName = SESS ? SESS.name : ''; setWho(); showLock(!SESS);
   renderAll();
   db.collection('missions').onSnapshot((snap) => {
     const local = new Map(S.rows.map((r) => [r.id, r]));
-    S.rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    local.forEach((r, id) => { if (!S.rows.some((x) => x.id === id) && S.pendingFocus === id) S.rows.push(r); });
+    S.allRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    local.forEach((r, id) => { if (!S.allRows.some((x) => x.id === id) && S.pendingFocus === id) S.allRows.push(r); });
     S.loaded = true; renderAll();
   }, () => { S.err = true; renderStatus(); toast('การเชื่อมต่อข้อมูลขาด โหลดหน้าใหม่อีกครั้ง'); });
   db.collection('versions').orderBy('at', 'desc').limit(60).onSnapshot(async (snap) => { S.versions = snap.docs.map((d) => ({ id: d.id, ...d.data() })); await resolveNames(S.versions.map((v) => v.by)); if (S.panel === 'snaps') renderPanel(); }, () => {});
