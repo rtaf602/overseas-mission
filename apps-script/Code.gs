@@ -157,7 +157,7 @@ const API = {
     if (!want) throw err_('no_admin', 'ยังไม่ได้ตั้งรหัส admin (รัน setCodes ใน Apps Script)');
     if (sha256_(String(r.admin || '')) !== want) { Utilities.sleep(1500); throw err_('bad_admin', 'รหัส admin ไม่ถูกต้อง'); }
     const fy = Number(r.fy);
-    if (!(fy >= CFG.FIRST_FY && fy <= CFG.FIRST_FY + 30)) throw err_('bad_fy', 'ปีงบไม่ถูกต้อง');
+    if (!(fy >= 60 && fy <= CFG.FIRST_FY + 30)) throw err_('bad_fy', 'ปีงบไม่ถูกต้อง');
     const src = idFromUrl_(r.src), disp = idFromUrl_(r.disp);
     if (!src || !disp) throw err_('bad_link', 'ลิงก์ไม่ถูกต้อง วางลิงก์ Google Sheets ทั้ง 2 ไฟล์');
     if (src === disp) throw err_('same_file', 'ไฟล์ต้นทางและไฟล์แสดงผลต้องเป็นคนละไฟล์');
@@ -571,11 +571,25 @@ function renderDisplay_(fy) {
 function setup() {
   const fy = String(CFG.FIRST_FY);
   sheet_(fy, 'missions', M_COLS); sheet_(fy, 'logs', LOG_HEAD); snapSheet_(fy);
+  // Seed.gs แบบหลายปีงบ: { years: { 69: [...], 70: [...] } }
+  // ปีงบที่ยังไม่มีไฟล์ (เช่น 69) ระบบสร้างไฟล์ต้นทาง/แสดงผลให้ในโฟลเดอร์เดียวกับไฟล์ปีงบ 70
+  if (typeof SEED !== 'undefined' && SEED.years) {
+    Object.keys(SEED.years).forEach(function (y) {
+      if (!files_()[y]) createYearFiles_(Number(y));
+      sheet_(y, 'missions', M_COLS); sheet_(y, 'logs', LOG_HEAD); snapSheet_(y);
+      if (!readMissions_(y).length && SEED.years[y].length) {
+        writeMissions_(y, SEED.years[y]);
+        appendLogs_(y, [logRow_({ action: 'import', label: 'นำเข้าข้อมูลเริ่มต้น ' + SEED.years[y].length + ' ภารกิจ' }, 'ระบบ')]);
+        Logger.log('ปีงบ ' + y + ': นำเข้าข้อมูลเริ่มต้น ' + SEED.years[y].length + ' ภารกิจ');
+      }
+      markDirty_(y);
+    });
+  }
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty('CODE_HASH') || !p.getProperty('ADMIN_HASH')) throw new Error('ตั้งรหัสก่อน: ใส่รหัสใน setCodes() แล้วรัน setCodes หนึ่งครั้ง จากนั้นค่อยรัน setup');
   if (!p.getProperty('VER')) p.setProperty('VER', '1');
   // ติดตั้งครั้งแรก: นำข้อมูลจาก Seed.gs (ถ้าเพิ่มไฟล์นั้นไว้) ลงไฟล์ต้นทางที่ยังว่าง
-  if (typeof SEED !== 'undefined' && !readMissions_(fy).length) {
+  if (typeof SEED !== 'undefined' && SEED.missions && !readMissions_(fy).length) {
     writeMissions_(fy, SEED.missions || []);
     appendLogs_(fy, [logRow_({ action: 'import', label: 'นำเข้าข้อมูลเริ่มต้น ' + (SEED.missions || []).length + ' ภารกิจ' }, 'ระบบ')]);
     Logger.log('นำเข้าข้อมูลเริ่มต้น ' + (SEED.missions || []).length + ' ภารกิจ');
@@ -585,8 +599,21 @@ function setup() {
   ScriptApp.newTrigger('pruneLogs').timeBased().atHour(2).everyDays(1).inTimezone(CFG.TZ).create();
   DriveApp.getFolderById(CFG.BACKUP_FOLDER_ID).getName(); // ขอสิทธิ์ Drive ตอนนี้
   bump_();
-  renderDisplay_(fy);
+  Object.keys(files_()).forEach(function (y) { renderDisplay_(y); });
+  PropertiesService.getScriptProperties().setProperty('DIRTY_FYS', '[]');
   Logger.log('ตั้งค่าเสร็จแล้ว');
+}
+
+/** สร้างไฟล์ต้นทาง + ไฟล์แสดงผลของปีงบ (ใช้ตอนนำเข้าข้อมูลปีงบย้อนหลัง) */
+function createYearFiles_(fy) {
+  const srcDir = DriveApp.getFileById(CFG.SOURCE_ID).getParents(), dispDir = DriveApp.getFileById(CFG.DISPLAY_ID).getParents();
+  const a = SpreadsheetApp.create('รวมภารกิจต่างประเทศ ปีงบ' + fy + '_ต้นทาง'), b = SpreadsheetApp.create('รวมภารกิจต่างประเทศ ปีงบ' + fy + '_แสดงผล');
+  if (srcDir.hasNext()) DriveApp.getFileById(a.getId()).moveTo(srcDir.next());
+  if (dispDir.hasNext()) DriveApp.getFileById(b.getId()).moveTo(dispDir.next());
+  const reg = JSON.parse(prop_('FILES') || '{}');
+  reg[fy] = { src: a.getId(), disp: b.getId(), srcName: a.getName(), dispName: b.getName(), by: 'ระบบ', at: new Date().toISOString() };
+  PropertiesService.getScriptProperties().setProperty('FILES', JSON.stringify(reg));
+  Logger.log('สร้างไฟล์ปีงบ ' + fy + ': ' + a.getUrl() + ' และ ' + b.getUrl());
 }
 
 /**
