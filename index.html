@@ -369,6 +369,8 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .fyform input,.fyform select{font:inherit;font-size:14px;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .fyform select{align-self:flex-start}
 .snap .meta a{color:var(--accent)}
+.fychip{display:block;margin-top:2px;font-size:11px;line-height:1.3;color:#1F4E8C;background:#E3ECF8;border-radius:4px;padding:1px 6px;font-family:var(--f-ui, inherit)}
+.fychip.wait{color:#7A1A1A;background:#FDE8E8}
 </style>
 
 <div class="lock" id="lock" hidden>
@@ -486,7 +488,7 @@ const IC = {
 const TBC_COLORS = ['FF0000', 'C00000', '000000', '0070C0', '00B050', 'FFC000', '7030A0'];
 const PALETTE = ['000000', '595959', '7F7F7F', 'C00000', 'FF0000', 'FFC000', 'FFFF00', '92D050', '00B050', '00B0F0', '0070C0', '002060', '7030A0', 'FFFFFF', 'D9D9D9', 'F2F2F2', 'F8CBAD', 'FCE4D6', 'FFF2CC', 'E2EFDA', 'DDEBF7'];
 
-const S = { fy: 70, allRows: [], rows: [], loaded: false, canWrite: false, edit: false, view: 'sheet', filter: 'all', q: '', versions: [], logs: [], logsOn: false, logsLoaded: false, me: null, names: {}, saving: 0, lastSave: null, err: false, pendingFocus: null, armDel: null, panel: null, armRestore: null, sel: null, scope: 'cell', dbChecked: false };
+const S = { fy: 70, rawRows: [], allRows: [], rows: [], loaded: false, canWrite: false, edit: false, view: 'sheet', filter: 'all', q: '', versions: [], logs: [], logsOn: false, logsLoaded: false, me: null, names: {}, saving: 0, lastSave: null, err: false, pendingFocus: null, armDel: null, panel: null, armRestore: null, sel: null, scope: 'cell', dbChecked: false };
 let db = null, user = null, downloads = null;
 
 // ---------- order & position ----------
@@ -876,6 +878,13 @@ function fillDateBtn(btn, r) {
   btn.replaceChildren();
   if (!datesOf(r)) { const ph = document.createElement('span'); ph.className = 'ph'; ph.textContent = 'คลิกเพื่อเลือกวัน'; btn.append(ph); }
   dateParts(r, false).forEach((p) => { const s = document.createElement('span'); s.className = 'sub'; if (p.tbc) s.style.color = '#' + tbcColorOf(r); s.textContent = p.t; btn.append(s); });
+  const chip = fyChip(r); if (chip) { const c = document.createElement('span'); c.className = 'fychip' + (r.wantFy ? ' wait' : ''); c.textContent = chip; btn.append(c); }
+}
+// "อยู่ทั้งปีงบ 70 และ 71" for a mission done across two years; "รอย้ายไปปีงบ 71" while next year's files are not linked yet
+function fyChip(r) {
+  if (!FILES()) return '';
+  if (r.wantFy) return `รอย้ายไปปีงบ ${r.wantFy}`;
+  const f = S.fysOf && S.fysOf.get(r.id); return f && f.length > 1 ? `อยู่ทั้งปีงบ ${f.join(' และ ')}` : '';
 }
 function fillEditRow(tr, r, pos) {
   const g = tr.firstChild; g._n.textContent = String(pos); g._up.disabled = pos <= 1; g._dn.disabled = pos >= S.rows.length;
@@ -913,7 +922,7 @@ function renderSheet() {
       COLS.forEach((f) => {
         const td = document.createElement('td');
         if (f === 'no') td.textContent = String(pos);
-        else if (f === 'dates') { dateParts(r).forEach((p) => { const s = document.createElement('span'); s.className = 'sub'; if (p.tbc) s.dataset.tbc = '1'; s.textContent = p.t; td.append(s); }); }
+        else if (f === 'dates') { dateParts(r).forEach((p) => { const s = document.createElement('span'); s.className = 'sub'; if (p.tbc) s.dataset.tbc = '1'; s.textContent = p.t; td.append(s); }); const ch = fyChip(r); if (ch) { const c = document.createElement('span'); c.className = 'fychip' + (r.wantFy ? ' wait' : ''); c.textContent = ch; td.append(c); } }
         else td.textContent = r[f] == null ? '' : String(r[f]);
         Object.assign(td.style, styleOf(r, f, 'px'));
         if (f === 'dates') td.querySelectorAll('[data-tbc]').forEach((s) => { s.style.color = '#' + tbcColorOf(r); });
@@ -973,8 +982,8 @@ function addRow(afterId) {
   const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const doc = { order: at + 0.5, callsign: '', mission: '', route: '', aircraft: 'A320', stby_aircraft: '', pax: '', owner: '', dates: '', ranges: [], dateTbc: false, start: '', end: '', status: 'รอยืนยันภารกิจ', note: '', fmt: {}, updatedAt: new Date().toISOString(), updatedBy: S.me || '' };
   resetFilters(); S.view = 'sheet'; S.pendingFocus = id;
-  const nr = { id, ...doc, _fy: S.fy }; S.allRows.push(nr); S.rows.push(nr); ids.splice(at, 0, id);
-  write(id, () => db.doc('missions/' + id).set(doc)).then(() => { applyOrder(ids); log({ action: 'add', mid: id, no: at + 1, mission: '' }); toast(afterId ? `แทรกภารกิจที่ ${at + 1} แล้ว` : `เพิ่มภารกิจที่ ${at + 1} แล้ว`); }).catch(() => { S.allRows = S.allRows.filter((r) => r.id !== id); renderAll(); });
+  const nr = { id, ...doc, _fy: S.fy }; S.rawRows.push(nr); S.rows.push(nr); ids.splice(at, 0, id);
+  write(id, () => db.doc('missions/' + id).set(doc)).then(() => { applyOrder(ids); log({ action: 'add', mid: id, no: at + 1, mission: '' }); toast(afterId ? `แทรกภารกิจที่ ${at + 1} แล้ว` : `เพิ่มภารกิจที่ ${at + 1} แล้ว`); }).catch(() => { S.rawRows = S.rawRows.filter((r) => r.id !== id); renderAll(); });
   renderAll();
 }
 $('#addRow').addEventListener('click', () => addRow(null));
@@ -985,7 +994,14 @@ const SHEET_FY = 70;
 // ---------- fiscal-year files (GitHub version: links pasted from this page; claude.ai version: one year) ----------
 const FILES = () => (window.APP_FILES ? window.APP_FILES.files() : null);
 const fyList = () => { const f = FILES(); return f ? Object.keys(f).map(Number).sort((a, b) => a - b) : [S.fy]; };
-function splitRows() { S.rows = S.allRows.filter((r) => r._fy == null || r._fy === S.fy); }
+// rawRows: every copy from every fiscal-year file (a mission done across two years sits in both)
+// rows: the table's year · allRows: one copy per mission (timeline / calendar)
+function splitRows() {
+  S.rows = S.rawRows.filter((r) => r._fy == null || r._fy === S.fy);
+  const one = new Map(); S.rawRows.forEach((r) => { const o = one.get(r.id); if (!o || r._fy === S.fy) one.set(r.id, r); });
+  S.allRows = [...one.values()];
+  S.fysOf = new Map(); S.rawRows.forEach((r) => { if (r._fy != null) S.fysOf.set(r.id, [...(S.fysOf.get(r.id) || []), r._fy].sort()); });
+}
 function setFy(fy) {
   if (fy === S.fy && S.fyChosen) return;
   S.fy = fy; S.fyChosen = true; S.versions = []; S.logs = []; S.logsLoaded = false;
@@ -1007,19 +1023,26 @@ function renderFyBar() {
   const bar = $('#fyBar'), F = FILES();
   if (!F || !S.loginName) { bar.hidden = true; return; }
   const now = new Date(Date.now() + 7 * 3600e3), cur = fyNow(), m = now.getUTCMonth();
+  const wait = S.allRows.filter((r) => r.wantFy), wn = wait.length;
+  const waitTxt = (fy) => wn ? ` · มี ${wn} ภารกิจของปีงบ ${fy} บันทึกไว้ในชีทปีงบเก่าก่อน และจะย้ายให้เองเมื่อวางลิงก์` : '';
   let msg = '', red = false, need = 0;
-  if (!F[cur]) { need = cur; red = true; msg = `ขึ้นปีงบ ${cur} แล้ว แต่ยังไม่ได้วางลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของปีงบ ${cur} · ตอนนี้ภารกิจที่เพิ่มจะบันทึกลงไฟล์ปีงบ ${S.fy}`; }
+  if (!F[cur]) { need = cur; red = true; msg = `ขึ้นปีงบ ${cur} แล้ว แต่ยังไม่ได้วางลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของปีงบ ${cur} · ยังแก้ไขได้ตามปกติ แต่ข้อมูลจะบันทึกลงชีทปีงบ ${Math.max(...fyList())} ไว้ก่อน${waitTxt(cur)}`; }
   else if ((m === 7 || m === 8) && !F[cur + 1]) {
     need = cur + 1;
     const oct1 = Date.UTC(now.getUTCFullYear(), 9, 1), today = Date.UTC(now.getUTCFullYear(), m, now.getUTCDate());
     const days = Math.round((oct1 - today) / 864e5); red = days <= 1;
-    msg = `อีก ${days} วันจะขึ้นปีงบ ${cur + 1} (1 ต.ค.${String((now.getUTCFullYear() + 543) % 100).padStart(2, '0')}) · วางลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของปีงบ ${cur + 1} ไว้ก่อน ระบบจะเริ่มใช้ไฟล์ใหม่เองวันที่ 1 ต.ค.`;
-  }
+    msg = `อีก ${days} วันจะขึ้นปีงบ ${cur + 1} (1 ต.ค.${String((now.getUTCFullYear() + 543) % 100).padStart(2, '0')}) · ให้ admin วางลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของปีงบ ${cur + 1} ไว้ก่อน ระบบจะเริ่มใช้ไฟล์ใหม่เองวันที่ 1 ต.ค.${waitTxt(cur + 1)}`;
+  } else if (wn) { need = Number(String(wait[0].wantFy).split(',')[0]); msg = `มี ${wn} ภารกิจของปีงบ ${need} บันทึกไว้ในชีทปีงบ ${cur} ก่อน เพราะยังไม่ได้วางลิงก์ไฟล์ปีงบ ${need} · ระบบจะย้ายให้เองเมื่อวางลิงก์`; }
   bar.hidden = !msg; if (!msg) return;
   bar.className = 'fybar' + (red ? ' red' : '');
   bar.innerHTML = `<span>${esc(msg)}</span><button type="button" class="${red ? 'danger arm' : 'primary'}" id="fyGo">วางลิงก์ปีงบ ${need}</button>`;
-  $('#fyGo').addEventListener('click', () => { S.filesFy = need; openPanel('files'); });
+  $('#fyGo').addEventListener('click', () => { S.filesFy = need; S.ffErr = ''; openPanel('files'); });
 }
+window.addEventListener('app-moved', (e) => {
+  const m = (e.detail || [])[0]; if (!m) return;
+  const name = m.mission ? `"${m.mission}"` : 'ภารกิจ';
+  toast(m.want ? `${name} บันทึกไว้ในปีงบ ${m.to.join(', ')} ก่อน · จะย้ายไปปีงบ ${m.want} เองเมื่อวางลิงก์` : m.to.length > 1 ? `${name} ปฏิบัติข้ามปีงบ · บันทึกไว้ทั้งปีงบ ${m.to.join(' และ ')}` : `${name} ย้ายไปอยู่ปีงบ ${m.to[0]} ตามวันปฏิบัติภารกิจ`);
+});
 window.addEventListener('app-files', () => { if (!S.fyChosen) setFy(defaultFy()); else renderAll(); });
 document.addEventListener('change', (e) => { if (e.target && e.target.id === 'fySel') setFy(Number(e.target.value)); });
 const fyNow = () => { const d = new Date(Date.now() + 7 * 3600e3); return (d.getUTCFullYear() + 543 + (d.getUTCMonth() >= 9 ? 1 : 0)) % 100; };
@@ -1289,7 +1312,8 @@ function renderCards(shown) {
   if (!shown.length) h += `<div class="empty">${S.rows.length ? 'ไม่พบภารกิจที่ตรงกับตัวกรอง' : 'ยังไม่มีภารกิจ'}</div>`;
   shown.forEach((r) => {
     const pos = POS.get(r.id), g = group(r.status);
-    const dl = dateParts(r, false).map((p) => (p.tbc ? `<span class="tb" style="color:#${tbcColorOf(r)}">${TBC}</span>` : esc(p.t))).join('<br>');
+    const ch = fyChip(r);
+    const dl = dateParts(r, false).map((p) => (p.tbc ? `<span class="tb" style="color:#${tbcColorOf(r)}">${TBC}</span>` : esc(p.t))).join('<br>') + (ch ? `<span class="fychip${r.wantFy ? ' wait' : ''}">${esc(ch)}</span>` : '');
     h += `<div class="mcard ${g}${pos % 2 === 0 ? ' even' : ''}${isFlash(r.id) ? ' flash' : ''}" data-id="${esc(r.id)}" role="button" tabindex="0">` +
       `<div class="h"><span class="no">${pos}</span><span class="ti">${esc(r.mission || '(ยังไม่ใส่ชื่อภารกิจ)')}</span><span class="stt s-${g}">${esc(r.status || '')}</span></div>` +
       `<div><span class="cs">${esc(r.callsign || '-')}</span> <span class="mu">· ${esc(r.aircraft || '-')} / STBY ${esc(r.stby_aircraft || '-')} · PAX ${esc(r.pax || '-')}</span></div>` +
@@ -1692,7 +1716,7 @@ function renderPanel() {
     const F = FILES() || {}, cur = fyNow(), fys = fyList();
     const target = S.filesFy || (F[cur] ? cur + 1 : cur);
     const link = (id) => `https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/edit`;
-    let h = `<div class="phead"><h2>ไฟล์ข้อมูลแต่ละปีงบ</h2><button type="button" class="ghost" id="pClose">${IC.x}ปิด</button></div><p class="pdesc">แต่ละปีงบมีไฟล์ต้นทาง (ข้อมูลจริงที่หน้าเว็บอ่านและเขียน) และไฟล์แสดงผล (ตารางที่ระบบวาดให้ดู) ของตัวเอง ระบบเริ่มใช้ไฟล์ของปีงบใหม่เองวันที่ 1 ต.ค. ส่วนไทม์ไลน์และปฏิทินแสดงภารกิจของทุกปีงบรวมกัน</p><div class="snaps">`;
+    let h = `<div class="phead"><h2>ไฟล์ข้อมูลแต่ละปีงบ</h2><button type="button" class="ghost" id="pClose">${IC.x}ปิด</button></div><p class="pdesc">แต่ละปีงบมีไฟล์ต้นทาง (ข้อมูลจริงที่หน้าเว็บอ่านและเขียน) และไฟล์แสดงผล (ตารางที่ระบบวาดให้ดู) ของตัวเอง ภารกิจถูกจัดเข้าปีงบตามวันปฏิบัติภารกิจเอง ภารกิจที่ปฏิบัติข้ามปีงบอยู่ทั้ง 2 ปีงบ (แก้ที่ไหนก็ตรงกัน) ส่วนภารกิจที่มีช่วงวัน "หรือ" คร่อมปีงบอยู่ปีงบก่อนหน้าจนกว่าจะเหลือช่วงเดียว ไทม์ไลน์และปฏิทินแสดงภารกิจของทุกปีงบรวมกัน</p><div class="snaps">`;
     fys.slice().reverse().forEach((fy) => {
       const f = F[fy] || {};
       h += `<div class="snap"><span class="nm">ปีงบ ${fy}${fy === cur ? ' · ปีงบปัจจุบัน' : ''}</span><span class="meta"><a href="${link(f.src)}" target="_blank" rel="noopener">${esc(f.srcName || 'ไฟล์ต้นทาง')}</a><br><a href="${link(f.disp)}" target="_blank" rel="noopener">${esc(f.dispName || 'ไฟล์แสดงผล')}</a></span></div>`;
@@ -1705,6 +1729,7 @@ function renderPanel() {
       <div class="fyform"><label>ปีงบ <select id="ffFy">${opts.sort().map((v) => `<option value="${v}"${v === target ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
       <label>ลิงก์ไฟล์ต้นทาง<input id="ffSrc" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="${esc(S.ffSrc || '')}"></label>
       <label>ลิงก์ไฟล์แสดงผล<input id="ffDisp" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="${esc(S.ffDisp || '')}"></label>
+      <label>รหัส admin<input id="ffAdmin" type="password" autocomplete="off" placeholder="เฉพาะผู้ดูแลระบบ"></label>
       <div class="lockerr" id="ffErr" role="alert">${esc(S.ffErr || '')}</div>
       <button type="button" class="primary" id="ffSave"${S.ffBusy ? ' disabled' : ''}>${S.ffBusy ? 'กำลังตรวจไฟล์…' : 'บันทึกลิงก์'}</button></div>`;
     }
@@ -1714,8 +1739,11 @@ function renderPanel() {
     if ($('#ffSave')) $('#ffSave').addEventListener('click', async () => {
       keep(); const fy = Number($('#ffFy').value);
       if (F[fy] && !S.ffArm) { S.ffArm = true; S.ffErr = `ปีงบ ${fy} มีลิงก์อยู่แล้ว กดบันทึกอีกครั้งเพื่อเปลี่ยนเป็นไฟล์ใหม่`; renderPanel(); return; }
-      S.ffArm = false; S.ffBusy = true; S.ffErr = ''; renderPanel();
-      try { await window.APP_FILES.set(fy, S.ffSrc, S.ffDisp); S.ffSrc = S.ffDisp = ''; S.filesFy = null; toast(`บันทึกลิงก์ไฟล์ปีงบ ${fy} แล้ว`); }
+      if (!$('#ffAdmin').value) { S.ffErr = 'ใส่รหัส admin ก่อน'; renderPanel(); return; }
+      const admKeep = $('#ffAdmin').value;
+      S.ffArm = false; S.ffBusy = true; S.ffErr = ''; renderPanel(); if ($('#ffAdmin')) $('#ffAdmin').value = admKeep;
+      const adm = $('#ffAdmin') ? $('#ffAdmin').value : '';
+      try { const r = await window.APP_FILES.set(fy, S.ffSrc, S.ffDisp, adm); S.ffSrc = S.ffDisp = ''; S.filesFy = null; toast(`บันทึกลิงก์ไฟล์ปีงบ ${fy} แล้ว` + (r && r.moved ? ` · ย้ายภารกิจเข้าปีงบให้ตรงวันที่ ${r.moved} รายการ` : '')); }
       catch (e) { S.ffErr = (e && e.message) || 'บันทึกไม่สำเร็จ'; }
       finally { S.ffBusy = false; renderPanel(); }
     });
@@ -1737,6 +1765,7 @@ function renderPanel() {
       else if (l.action === 'version') { act = 'บันทึกฉบับ'; det = esc(l.label || ''); }
       else if (l.action === 'restore') { act = 'ย้อนแผนเป็นฉบับ'; det = esc(l.label || ''); }
       else if (l.action === 'files') { act = 'วางลิงก์ไฟล์ปีงบ'; det = esc(l.label || ''); }
+      else if (l.action === 'move') { act = `ย้ายปีงบ${l.mission ? ' (' + esc(l.mission) + ')' : ''}`; det = esc(`ปีงบ ${l.from || '-'} → ${l.to || '-'}`) + (l.label ? ' · ' + esc(l.label) : ''); }
       else if (l.action === 'import') { act = 'นำเข้าข้อมูลเริ่มต้น'; det = esc(l.label || ''); }
       h += `<div class="lg"><time>${tm}</time><span><span class="by">${esc(l.byName || nameOf(l.by))}</span> ${act}</span>${det ? `<span class="det">${det}</span>` : ''}</div>`;
     });
@@ -1842,8 +1871,8 @@ S.loginName = SESS ? SESS.name : ''; setWho(); showLock(!SESS);
   renderAll();
   db.collection('missions').onSnapshot((snap) => {
     const local = new Map(S.rows.map((r) => [r.id, r]));
-    S.allRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    local.forEach((r, id) => { if (!S.allRows.some((x) => x.id === id) && S.pendingFocus === id) S.allRows.push(r); });
+    S.rawRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    local.forEach((r, id) => { if (!S.rawRows.some((x) => x.id === id) && S.pendingFocus === id) S.rawRows.push(r); });
     S.loaded = true; renderAll();
   }, () => { S.err = true; renderStatus(); toast('การเชื่อมต่อข้อมูลขาด โหลดหน้าใหม่อีกครั้ง'); });
   db.collection('versions').orderBy('at', 'desc').limit(60).onSnapshot(async (snap) => { S.versions = snap.docs.map((d) => ({ id: d.id, ...d.data() })); await resolveNames(S.versions.map((v) => v.by)); if (S.panel === 'snaps') renderPanel(); }, () => {});

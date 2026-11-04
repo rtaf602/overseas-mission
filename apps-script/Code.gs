@@ -5,7 +5,9 @@
  * (Extensions > Apps Script) แล้วรัน setup() หนึ่งครั้ง จากนั้น Deploy เป็น Web app
  *
  * - แต่ละปีงบมีไฟล์ "ต้นทาง" ของตัวเอง (แท็บ missions, logs, snapshots) และไฟล์ "แสดงผล" (แท็บชื่อเลขปีงบ)
- * - ไฟล์ปีงบถัดไปวางลิงก์จากหน้าเว็บได้ (ปุ่ม "ไฟล์ข้อมูล") ไม่ต้องแก้โค้ด
+ * - ไฟล์ปีงบถัดไปวางลิงก์จากหน้าเว็บได้ (ปุ่ม "ไฟล์ข้อมูล" + รหัส admin) ไม่ต้องแก้โค้ด
+ * - ภารกิจถูกจัดเข้าปีงบตามวันปฏิบัติภารกิจเอง (ดู placeFys_)
+ * - รหัสเปิดใช้งานและรหัส admin ไม่อยู่ในไฟล์นี้: ตั้งด้วยฟังก์ชัน setCodes() ใน Apps Script
  * - ไฟล์ "แสดงผล" ถูกวาดใหม่จากข้อมูลต้นทางหลังทุกการแก้ไข (อ่านอย่างเดียว)
  * - กด "บันทึกฉบับ" แล้วเก็บไฟล์ Excel ในโฟลเดอร์ Backup ไว้ 20 ไฟล์ล่าสุด
  */
@@ -15,7 +17,6 @@ const CFG = {
   SOURCE_ID: '1-UUsKGb9GCHs0PkdQK9t9TfIU7NY9L8xSBG9zRbx9rE',      // รวมภารกิจต่างประเทศ ปีงบ70_ต้นทาง
   DISPLAY_ID: '1TuvHy3uBUfKisQM6LfbwDW1F1s2du9D6NiDg1lQTkds',     // รวมภารกิจต่างประเทศ_แสดงผล (ปีงบ70)
   BACKUP_FOLDER_ID: '1TCrfUJcOVO5Tu61eKnV3w_AYxYwHywp7',          // รวมภารกิจต่างประเทศ Backup
-  DEFAULT_CODE: 'operation.slide',   // รหัสเปิดใช้งานเริ่มต้น (เปลี่ยนได้ด้วย setAccessCode)
   KEEP_BACKUPS: 20,
   KEEP_SNAPS: 20,
   SESSION_SEC: 3600,                 // ใส่รหัสแล้วใช้ได้ 1 ชั่วโมง
@@ -26,7 +27,7 @@ const CFG = {
 };
 
 const M_COLS = ['id', 'order', 'no', 'callsign', 'mission', 'route', 'aircraft', 'stby_aircraft', 'pax', 'owner', 'dates', 'start', 'end',
-  'status', 'note', 'ranges', 'dateTbc', 'tbcColor', 'fmt', 'updatedAt', 'updatedByName', 'extra'];
+  'status', 'note', 'ranges', 'dateTbc', 'tbcColor', 'fmt', 'wantFy', 'updatedAt', 'updatedByName', 'extra'];
 const M_NUM = { order: 1, no: 1 };
 const M_JSON = { ranges: 1, fmt: 1 };
 const M_BOOL = { dateTbc: 1 };
@@ -60,7 +61,8 @@ const API = {
   login: function (r) {
     const name = String(r.name || '').trim().slice(0, 60);
     if (!name) throw err_('no_name', 'กรุณาใส่ชื่อผู้ใช้งาน');
-    const want = PropertiesService.getScriptProperties().getProperty('CODE_HASH') || sha256_(CFG.DEFAULT_CODE);
+    const want = prop_('CODE_HASH');
+    if (!want) throw err_('no_code', 'ยังไม่ได้ตั้งรหัสเปิดใช้งาน (รัน setCodes ใน Apps Script)');
     if (sha256_(String(r.code || '').trim()) !== want) { Utilities.sleep(700); throw err_('bad_code', 'รหัสไม่ถูกต้อง'); }
     const token = Utilities.getUuid().replace(/-/g, '');
     CacheService.getScriptCache().put('tok:' + token, JSON.stringify({ name: name }), CFG.SESSION_SEC);
@@ -79,26 +81,32 @@ const API = {
     return out;
   },
 
+  // ทุกการแก้ภารกิจ: รวมสำเนาทุกปีงบของภารกิจนั้น แก้ แล้ววางใหม่ให้ตรงปีงบตามวันปฏิบัติภารกิจ
   write: function (r, s) {
     return withLock_(function () {
-      const maps = {}, logs = {}, dirty = {};
-      const mapOf = function (fy) { if (!maps[fy]) { maps[fy] = {}; readMissions_(fy).forEach(function (m) { maps[fy][m.id] = m; }); } return maps[fy]; };
+      const st = allMaps_(), logs = {}, moved = [];
       (r.ops || []).forEach(function (o) {
-        const fy = fyArg_(o.fy || r.fy);
-        if (o.op === 'log') { (logs[fy] = logs[fy] || []).push(logRow_(o.data || {}, s.name)); return; }
-        const map = mapOf(fy);
+        if (o.op === 'log') { const fy = fyArg_(o.fy || r.fy); (logs[fy] = logs[fy] || []).push(logRow_(o.data || {}, s.name)); return; }
         const id = String(o.id || '');
         if (!/^[A-Za-z0-9_\-]{1,60}$/.test(id)) throw err_('bad_id', 'รหัสภารกิจไม่ถูกต้อง');
-        if (o.op === 'delete') delete map[id];
-        else if (o.op === 'update') { if (map[id]) map[id] = merge_(map[id], o.data || {}); }
-        else map[id] = Object.assign({}, o.data || {}, { id: id });
-        if (map[id] && o.op !== 'delete') map[id].updatedByName = s.name;
-        dirty[fy] = 1;
+        const had = fysOf_(st, id), cur = had.length ? st.maps[had[0]][id] : null;
+        if (o.op === 'delete') { had.forEach(function (fy) { delete st.maps[fy][id]; st.dirty[fy] = 1; }); return; }
+        let row;
+        if (o.op === 'update') { if (!cur) return; row = merge_(cur, o.data || {}); }
+        else row = Object.assign({}, o.data || {}, { id: id });
+        row.updatedByName = s.name;
+        const home = had.length ? had : [fyArg_(o.fy || r.fy)];
+        const res = place_(st, row, home);
+        if ((res.from.length ? res.from : home).join() !== res.to.join() || row.wantFy) moved.push({ id: id, mission: row.mission || '', from: res.from, to: res.to, want: row.wantFy || '' });
       });
-      Object.keys(dirty).forEach(function (fy) { writeMissions_(fy, objValues_(maps[fy])); markDirty_(fy); });
+      moved.forEach(function (m) {
+        const lg = logRow_({ action: 'move', mid: m.id, mission: m.mission, from: m.from.join(', '), to: m.to.join(', '), label: m.want ? 'รอย้ายไปปีงบ ' + m.want : '' }, s.name);
+        m.to.concat(m.from).filter(function (v, i, a) { return a.indexOf(v) === i; }).forEach(function (fy) { (logs[fy] = logs[fy] || []).push(lg); });
+      });
+      saveMaps_(st);
       Object.keys(logs).forEach(function (fy) { appendLogs_(fy, logs[fy]); });
-      const changed = Object.keys(dirty).length > 0;
-      return { ok: true, ver: changed ? bump_() : ver_() };
+      const changed = Object.keys(st.dirty).length > 0;
+      return { ok: true, ver: changed ? bump_() : ver_(), moved: moved };
     });
   },
 
@@ -133,6 +141,9 @@ const API = {
 
   // วางลิงก์ไฟล์ต้นทาง + ไฟล์แสดงผลของปีงบ (จากหน้าเว็บ)
   setFiles: function (r, s) {
+    const want = prop_('ADMIN_HASH');
+    if (!want) throw err_('no_admin', 'ยังไม่ได้ตั้งรหัส admin (รัน setCodes ใน Apps Script)');
+    if (sha256_(String(r.admin || '')) !== want) { Utilities.sleep(1500); throw err_('bad_admin', 'รหัส admin ไม่ถูกต้อง'); }
     const fy = Number(r.fy);
     if (!(fy >= CFG.FIRST_FY && fy <= CFG.FIRST_FY + 30)) throw err_('bad_fy', 'ปีงบไม่ถูกต้อง');
     const src = idFromUrl_(r.src), disp = idFromUrl_(r.disp);
@@ -152,10 +163,80 @@ const API = {
       sheet_(fy, 'missions', M_COLS); sheet_(fy, 'logs', LOG_HEAD); snapSheet_(fy);
       appendLogs_(fy, [logRow_({ action: 'files', label: 'วางลิงก์ไฟล์ปีงบ ' + fy + ': ' + a.getName() + ' / ' + b.getName() }, s.name)]);
       markDirty_(fy);
-      return { ok: true, files: files_(), ver: bump_() };
+      const n = rebalance_(s.name);  // ย้ายภารกิจที่รอปีงบนี้ไปไฟล์ใหม่
+      return { ok: true, files: files_(), ver: bump_(), moved: n };
     });
   }
 };
+
+/* =========================== จัดภารกิจเข้าปีงบ =========================== */
+// ปีงบ N = 1 ต.ค.(N-1) – 30 ก.ย.N (เลขปี พ.ศ. 2 หลัก)
+function fyOfIso_(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})/); if (!m) return 0;
+  return (Number(m[1]) + 543 + (Number(m[2]) >= 10 ? 1 : 0)) % 100;
+}
+// ปีงบที่ภารกิจควรอยู่ (ยังไม่สนว่าวางลิงก์แล้วหรือยัง)
+//  - มีช่วงวัน "หรือ" หลายช่วงที่คร่อมปีงบ: อยู่ปีงบก่อนหน้า (ปีงบแรก) จนกว่าจะเหลือช่วงเดียว
+//  - ช่วงเดียวที่ปฏิบัติจริงข้ามปีงบ: อยู่ทั้ง 2 ปีงบ (เป็นภารกิจเดียวกัน แก้ที่ไหนก็ตรงกัน)
+//  - ยังไม่ใส่วันที่: อยู่ปีงบเดิม
+function wantFys_(row, home) {
+  let rs = Array.isArray(row.ranges) ? row.ranges.filter(function (x) { return x && x.s; }) : [];
+  if (!rs.length && row.start) rs = [{ s: row.start, e: row.end || row.start }];
+  if (!rs.length) return home.map(Number);
+  const fys = [];
+  rs.forEach(function (x) { [fyOfIso_(x.s), fyOfIso_(x.e || x.s)].forEach(function (f) { if (f && fys.indexOf(f) < 0) fys.push(f); }); });
+  fys.sort(function (a, b) { return a - b; });
+  if (rs.length > 1) return [fys[0]];
+  const out = []; for (let f = fys[0]; f <= fys[fys.length - 1]; f++) out.push(f);
+  return out;
+}
+// ปีงบที่ยังไม่มีลิงก์: เก็บไว้ในปีงบล่าสุดที่มีลิงก์ก่อนหน้านั้น แล้วจด wantFy ไว้ย้ายทีหลัง
+function placeFys_(row, home) {
+  const reg = Object.keys(files_()).map(Number).sort(function (a, b) { return a - b; });
+  const want = wantFys_(row, home), out = [], wait = [];
+  want.forEach(function (f) {
+    let t = f;
+    if (reg.indexOf(f) < 0) { const past = reg.filter(function (x) { return x < f; }); t = past.length ? past[past.length - 1] : reg[0]; wait.push(f); }
+    if (out.indexOf(t) < 0) out.push(t);
+  });
+  return { fys: out.map(String), wait: wait };
+}
+function allMaps_() {
+  const st = { maps: {}, dirty: {} };
+  Object.keys(files_()).forEach(function (fy) { st.maps[fy] = {}; readMissions_(fy).forEach(function (m) { st.maps[fy][m.id] = m; }); });
+  return st;
+}
+function fysOf_(st, id) { return Object.keys(st.maps).filter(function (fy) { return st.maps[fy][id]; }); }
+function place_(st, row, home) {
+  const from = fysOf_(st, row.id), pl = placeFys_(row, home);
+  if (pl.wait.length) row.wantFy = pl.wait.join(','); else delete row.wantFy;
+  Object.keys(st.maps).forEach(function (fy) {
+    if (pl.fys.indexOf(fy) >= 0) { st.maps[fy][row.id] = Object.assign({}, row); st.dirty[fy] = 1; }
+    else if (st.maps[fy][row.id]) { delete st.maps[fy][row.id]; st.dirty[fy] = 1; }
+  });
+  return { from: from, to: pl.fys };
+}
+function saveMaps_(st) {
+  Object.keys(st.dirty).forEach(function (fy) { writeMissions_(fy, objValues_(st.maps[fy])); markDirty_(fy); });
+}
+// จัดทุกภารกิจใหม่ (หลังวางลิงก์ปีงบใหม่)
+function rebalance_(by) {
+  const st = allMaps_(), seen = {}, logs = {}; let n = 0;
+  Object.keys(st.maps).forEach(function (fy) {
+    objValues_(st.maps[fy]).forEach(function (m) {
+      if (seen[m.id]) return; seen[m.id] = 1;
+      const res = place_(st, m, fysOf_(st, m.id));
+      if (res.from.join() !== res.to.join()) {
+        n++;
+        const lg = logRow_({ action: 'move', mid: m.id, mission: m.mission || '', from: res.from.join(', '), to: res.to.join(', ') }, by);
+        res.to.concat(res.from).filter(function (v, i, a) { return a.indexOf(v) === i; }).forEach(function (f) { (logs[f] = logs[f] || []).push(lg); });
+      }
+    });
+  });
+  saveMaps_(st);
+  Object.keys(logs).forEach(function (fy) { appendLogs_(fy, logs[fy]); });
+  return n;
+}
 
 /* =========================== helpers =========================== */
 
@@ -471,7 +552,7 @@ function setup() {
   const fy = String(CFG.FIRST_FY);
   sheet_(fy, 'missions', M_COLS); sheet_(fy, 'logs', LOG_HEAD); snapSheet_(fy);
   const p = PropertiesService.getScriptProperties();
-  if (!p.getProperty('CODE_HASH')) p.setProperty('CODE_HASH', sha256_(CFG.DEFAULT_CODE));
+  if (!p.getProperty('CODE_HASH') || !p.getProperty('ADMIN_HASH')) throw new Error('ตั้งรหัสก่อน: ใส่รหัสใน setCodes() แล้วรัน setCodes หนึ่งครั้ง จากนั้นค่อยรัน setup');
   if (!p.getProperty('VER')) p.setProperty('VER', '1');
   // ติดตั้งครั้งแรก: นำข้อมูลจาก Seed.gs (ถ้าเพิ่มไฟล์นั้นไว้) ลงไฟล์ต้นทางที่ยังว่าง
   if (typeof SEED !== 'undefined' && !readMissions_(fy).length) {
@@ -488,9 +569,20 @@ function setup() {
   Logger.log('ตั้งค่าเสร็จแล้ว');
 }
 
-/** เปลี่ยนรหัสเปิดใช้งาน: แก้ข้อความใน NEW_CODE แล้วรันฟังก์ชันนี้ */
-function setAccessCode() {
-  const NEW_CODE = 'operation.slide';
-  PropertiesService.getScriptProperties().setProperty('CODE_HASH', sha256_(NEW_CODE));
-  Logger.log('เปลี่ยนรหัสแล้ว');
+/**
+ * ตั้ง/เปลี่ยนรหัส: พิมพ์รหัสในเครื่องหมาย '' ด้านล่าง แล้วกด Run ฟังก์ชันนี้
+ * ระบบเก็บรหัสไว้ฝั่ง Google (Script Properties) แล้ว ให้ลบรหัสออกจากโค้ดและกดบันทึก
+ * อย่า commit รหัสลง GitHub
+ *  - ACCESS_CODE: รหัสเปิดใช้งานหน้าเว็บ (ทุกคน)
+ *  - ADMIN_CODE: รหัส admin สำหรับวางลิงก์ไฟล์ปีงบใหม่เท่านั้น
+ * เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนรหัสนั้น
+ */
+function setCodes() {
+  const ACCESS_CODE = '';
+  const ADMIN_CODE = '';
+  const p = PropertiesService.getScriptProperties();
+  if (ACCESS_CODE) { p.setProperty('CODE_HASH', sha256_(ACCESS_CODE.trim())); Logger.log('ตั้งรหัสเปิดใช้งานแล้ว'); }
+  if (ADMIN_CODE) { p.setProperty('ADMIN_HASH', sha256_(ADMIN_CODE)); Logger.log('ตั้งรหัส admin แล้ว'); }
+  if (!ACCESS_CODE && !ADMIN_CODE) Logger.log('ยังไม่ได้ใส่รหัสใน setCodes');
+  Logger.log('อย่าลืมลบรหัสออกจากโค้ดแล้วกดบันทึก');
 }

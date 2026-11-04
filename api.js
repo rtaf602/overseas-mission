@@ -69,7 +69,9 @@
     pending++;
     try {
       const r = await api('write', { ops, fy: curFy });
-      // the next sync fetches the server copy (it may include other people's edits too)
+      // missions may have moved to another fiscal year (by their dates): fetch the server copy now
+      if (r.moved && r.moved.length) window.dispatchEvent(new CustomEvent('app-moved', { detail: r.moved }));
+      setTimeout(kick, 0);
       clearTimeout(renderT); renderT = setTimeout(() => api('render').catch(() => {}), 4000);
       if (subs.logs.length) loadLogs();
       return r;
@@ -155,8 +157,8 @@
     files: () => D.files,
     fy: () => curFy,
     setFy(fy) { if (fy === curFy) return; curFy = fy; D.versions = []; emit('versions'); D.snapAt = -1; loadSnaps(); loadLogs(); },
-    async set(fy, src, disp) {
-      const r = await api('setFiles', { fy, src, disp });
+    async set(fy, src, disp, admin) {
+      const r = await api('setFiles', { fy, src, disp, admin });
       setFiles(r.files); D.ver = 0; kick();
       return r;
     },
