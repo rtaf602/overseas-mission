@@ -12,6 +12,26 @@
  * - กด "บันทึกฉบับ" แล้วเก็บไฟล์ Excel ในโฟลเดอร์ Backup ไว้ 20 ไฟล์ล่าสุด
  */
 
+/* ====================== ตั้งรหัส (ทำก่อน setup) ====================== */
+
+/**
+ * ตั้ง/เปลี่ยนรหัส: พิมพ์รหัสในเครื่องหมาย '' ด้านล่าง แล้วกด Run ฟังก์ชันนี้
+ * ระบบเก็บรหัสไว้ฝั่ง Google (Script Properties) แล้ว ให้ลบรหัสออกจากโค้ดและกดบันทึก
+ * อย่า commit รหัสลง GitHub
+ *  - ACCESS_CODE: รหัสเปิดใช้งานหน้าเว็บ (ทุกคน)
+ *  - ADMIN_CODE: รหัส admin สำหรับวางลิงก์ไฟล์ปีงบใหม่เท่านั้น
+ * เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนรหัสนั้น
+ */
+function setCodes() {
+  const ACCESS_CODE = '';
+  const ADMIN_CODE = '';
+  const p = PropertiesService.getScriptProperties();
+  if (ACCESS_CODE) { p.setProperty('CODE_HASH', sha256_(ACCESS_CODE.trim())); Logger.log('ตั้งรหัสเปิดใช้งานแล้ว'); }
+  if (ADMIN_CODE) { p.setProperty('ADMIN_HASH', sha256_(ADMIN_CODE)); Logger.log('ตั้งรหัส admin แล้ว'); }
+  if (!ACCESS_CODE && !ADMIN_CODE) Logger.log('ยังไม่ได้ใส่รหัสใน setCodes');
+  Logger.log('อย่าลืมลบรหัสออกจากโค้ดแล้วกดบันทึก');
+}
+
 const CFG = {
   FIRST_FY: 70,                                                   // ปีงบแรกที่ใช้ระบบ
   SOURCE_ID: '1-UUsKGb9GCHs0PkdQK9t9TfIU7NY9L8xSBG9zRbx9rE',      // รวมภารกิจต่างประเทศ ปีงบ70_ต้นทาง
@@ -614,22 +634,4 @@ function createYearFiles_(fy) {
   reg[fy] = { src: a.getId(), disp: b.getId(), srcName: a.getName(), dispName: b.getName(), by: 'ระบบ', at: new Date().toISOString() };
   PropertiesService.getScriptProperties().setProperty('FILES', JSON.stringify(reg));
   Logger.log('สร้างไฟล์ปีงบ ' + fy + ': ' + a.getUrl() + ' และ ' + b.getUrl());
-}
-
-/**
- * ตั้ง/เปลี่ยนรหัส: พิมพ์รหัสในเครื่องหมาย '' ด้านล่าง แล้วกด Run ฟังก์ชันนี้
- * ระบบเก็บรหัสไว้ฝั่ง Google (Script Properties) แล้ว ให้ลบรหัสออกจากโค้ดและกดบันทึก
- * อย่า commit รหัสลง GitHub
- *  - ACCESS_CODE: รหัสเปิดใช้งานหน้าเว็บ (ทุกคน)
- *  - ADMIN_CODE: รหัส admin สำหรับวางลิงก์ไฟล์ปีงบใหม่เท่านั้น
- * เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนรหัสนั้น
- */
-function setCodes() {
-  const ACCESS_CODE = '';
-  const ADMIN_CODE = '';
-  const p = PropertiesService.getScriptProperties();
-  if (ACCESS_CODE) { p.setProperty('CODE_HASH', sha256_(ACCESS_CODE.trim())); Logger.log('ตั้งรหัสเปิดใช้งานแล้ว'); }
-  if (ADMIN_CODE) { p.setProperty('ADMIN_HASH', sha256_(ADMIN_CODE)); Logger.log('ตั้งรหัส admin แล้ว'); }
-  if (!ACCESS_CODE && !ADMIN_CODE) Logger.log('ยังไม่ได้ใส่รหัสใน setCodes');
-  Logger.log('อย่าลืมลบรหัสออกจากโค้ดแล้วกดบันทึก');
 }
