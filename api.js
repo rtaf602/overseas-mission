@@ -25,9 +25,9 @@
   }
 
   // ---------- local copy of the data ----------
-  const D = { ver: 0, snapAt: -1, missions: [], versions: [], logs: [], files: null };
+  const D = { ver: 0, snapAt: -1, missions: [], versions: [], logs: [], settings: [], files: null };
   let curFy = null; // ปีงบที่ตารางกำลังแสดง (ตั้งโดยหน้าเว็บ)
-  const subs = { missions: [], versions: [], logs: [] };
+  const subs = { missions: [], versions: [], logs: [], settings: [] };
   const snap = (list) => ({ docs: list.map((o) => { const { id, ...rest } = o; return { id, exists: true, data: () => rest }; }), get size() { return list.length; }, get empty() { return !list.length; } });
   const emit = (c) => subs[c].forEach((s) => { try { s.next(snap(D[c])); } catch (_) {} });
   const fail = (c, e) => subs[c].forEach((s) => { try { s.err && s.err(e); } catch (_) {} });
@@ -52,7 +52,7 @@
     try {
       const r = await api('sync', { ver: D.ver });
       if (r.files) setFiles(r.files);
-      if (r.missions && !pending) { setMissions(r.missions, r.ver); loadLogs(); }
+      if (r.missions && !pending) { D.settings = r.holidays ? [{ id: 'holidays', map: r.holidays }] : []; emit('settings'); setMissions(r.missions, r.ver); loadLogs(); }
       if (r.snapAt !== D.snapAt) { D.snapAt = r.snapAt; loadSnaps(); }
     } catch (e) { if (e && e.code !== 'auth' && !D.ver) fail('missions', e); }
     finally { syncing = false; }
@@ -94,7 +94,12 @@
     const [c, id] = path.split('/');
     return {
       id,
-      async set(data) { if (c !== 'missions') return; const d = clone(data); const fy = d._fy || curFy; delete d._fy; const op = { op: 'set', id, fy, data: d }; applyLocal(op); await enqueue(op); },
+      async set(data) {
+        if (c === 'settings' && id === 'holidays') {
+          D.settings = [{ id: 'holidays', map: data.map || {} }]; emit('settings');
+          await Qp; await api('setHolidays', { map: data.map || {} }); setTimeout(kick, 0); return;
+        }
+        if (c !== 'missions') return; const d = clone(data); const fy = d._fy || curFy; delete d._fy; const op = { op: 'set', id, fy, data: d }; applyLocal(op); await enqueue(op); },
       async update(data) { if (c !== 'missions') return; const d = clone(data); delete d._fy; const op = { op: 'update', id, fy: fyOfId(id), data: d }; applyLocal(op); await enqueue(op); },
       async delete() { if (c !== 'missions') return; const op = { op: 'delete', id, fy: fyOfId(id) }; applyLocal(op); await enqueue(op); },
     };
@@ -109,7 +114,7 @@
       onSnapshot(next, err) {
         const s = { next, err }; subs[c].push(s);
         if (c === 'logs') loadLogs();
-        else if (D.ver || c === 'versions') setTimeout(() => next(snap(D[c])), 0);
+        else if (D.ver || c === 'versions' || c === 'settings') setTimeout(() => next(snap(D[c])), 0);
         return () => { subs[c] = subs[c].filter((x) => x !== s); };
       },
       async add(data) {

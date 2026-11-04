@@ -77,6 +77,7 @@ const API = {
     if (Number(r.ver) !== v) {
       out.missions = {};
       Object.keys(files).forEach(function (fy) { try { out.missions[fy] = readMissions_(fy); } catch (x) { out.missions[fy] = []; } });
+      out.holidays = readHolidays_();
     }
     return out;
   },
@@ -130,6 +131,17 @@ const API = {
 
   listLogs: function (r) {
     return { list: logsList_(fyArg_(r.fy), Math.min(1000, Number(r.limit) || 200)) };
+  },
+
+  // วันหยุดราชการ (ใช้ร่วมกันทุกปีงบ) เก็บในแท็บ holidays ของไฟล์ต้นทางปีงบแรก
+  setHolidays: function (r) {
+    const m = r.map || {}, rows = [['date', 'name']];
+    Object.keys(m).sort().forEach(function (k) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) throw err_('bad_date', 'วันที่ไม่ถูกต้อง');
+      const n = String(m[k] || '').trim().slice(0, 120); if (n) rows.push([k, n]);
+    });
+    if (rows.length > 2000) throw err_('too_many', 'วันหยุดมากเกินไป');
+    return withLock_(function () { rewrite_(sheet_(String(CFG.FIRST_FY), 'holidays', ['date', 'name']), rows); return { ok: true, ver: bump_() }; });
   },
 
   render: function () {
@@ -349,6 +361,14 @@ function writeMissions_(fy, list) {
     });
   }));
   rewrite_(sheet_(fy, 'missions', M_COLS), rows);
+}
+
+function readHolidays_() {
+  const ss = src_(String(CFG.FIRST_FY)), sh = ss.getSheetByName('holidays');
+  if (!sh || sh.getLastRow() < 2) return null;
+  const out = {};
+  sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) { if (r[0] && r[1]) out[String(r[0])] = String(r[1]); });
+  return out;
 }
 
 /* =========================== logs =========================== */

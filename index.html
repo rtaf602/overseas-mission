@@ -369,6 +369,11 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .fyform input,.fyform select{font:inherit;font-size:14px;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .fyform select{align-self:flex-start}
 .snap .meta a{color:var(--accent)}
+.holpop{padding:8px;min-width:240px}
+.holpop .holname{font-weight:700;padding:2px 8px 6px;font-size:14px}
+.holpop input{font:inherit;width:100%;box-sizing:border-box;margin:2px 0 4px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+.holpop .danger-t{color:var(--danger)}
+.month .mdh.hedit{cursor:pointer}.month .mdh.hedit:hover{box-shadow:inset 0 0 0 2px var(--accent)}
 .fychip{display:block;margin-top:2px;font-size:11px;line-height:1.3;color:#1F4E8C;background:#E3ECF8;border-radius:4px;padding:1px 6px;font-family:var(--f-ui, inherit)}
 .fychip.wait{color:#7A1A1A;background:#FDE8E8}
 </style>
@@ -1048,11 +1053,11 @@ document.addEventListener('change', (e) => { if (e.target && e.target.id === 'fy
 const fyNow = () => { const d = new Date(Date.now() + 7 * 3600e3); return (d.getUTCFullYear() + 543 + (d.getUTCMonth() >= 9 ? 1 : 0)) % 100; };
 const fyRange = (n) => { const ce = 2500 + n - 543; return [`${ce - 1}-10-01`, `${ce}-09-30`]; };
 // Official holidays (shown grey like weekends; the name shows on hover or tap). Add next year's list here.
-const HOLIDAYS = {
+// default list; the shared list (edited on the page) replaces it once saved
+const HOLIDAYS_DEFAULT = {
   '2026-10-13': 'วันนวมินทรมหาราช',
   '2026-10-23': 'วันปิยมหาราช',
   '2026-12-05': 'วันคล้ายวันพระบรมราชสมภพ พระบาทสมเด็จพระบรมชนกาธิเบศร มหาภูมิพลอดุลยเดชมหาราช บรมนาถบพิตร วันชาติ และวันพ่อแห่งชาติ',
-  '2026-12-06': 'วันพ่อแห่งชาติ และวันชาติ (วันอาทิตย์)',
   '2026-12-07': 'วันหยุดชดเชยวันพ่อแห่งชาติ และวันชาติ',
   '2026-12-10': 'วันรัฐธรรมนูญ',
   '2026-12-31': 'วันสิ้นปี',
@@ -1079,6 +1084,7 @@ const HOLIDAYS = {
   '2027-12-10': 'วันรัฐธรรมนูญ',
   '2027-12-31': 'วันสิ้นปี',
 };
+let HOLIDAYS = { ...HOLIDAYS_DEFAULT };
 const offDay = (iso, wd) => wd === 0 || wd === 6 || !!HOLIDAYS[iso];
 S.tl = { m0: null, span: '3', mode: 'cal', showRed: false, pv: 'list', fy: fyNow() };
 S.fit = true;
@@ -1268,7 +1274,7 @@ function renderMonthCal(w0, w1) {
       if (d > dim) { h += `<div class="mdh void${lc}" style="grid-row:1;grid-column:${d + 1}"></div>`; continue; }
       const iso = isoDay(new Date(Date.UTC(y, mo, d))), wd = new Date(Date.UTC(y, mo, d)).getUTCDay(), hol = HOLIDAYS[iso];
       const dl = `${TH_WD[wd]} ${d} ${TH_M[mo]}${yy(m)}${hol ? ' · ' + hol : ''}`;
-      h += `<div class="mdh${wd === 0 || wd === 6 ? ' we' : ''}${hol ? ' hol' : ''}${iso === todayIso ? ' today' : ''}${lc}" style="grid-row:1;grid-column:${d + 1}" title="${esc(iso === todayIso ? 'วันนี้ · ' + dl : dl)}"${hol ? ` data-hol="${esc(dl)}"` : ''}>${d}<small>${TH_WD[wd]}</small></div>`;
+      h += `<div class="mdh${wd === 0 || wd === 6 ? ' we' : ''}${hol ? ' hol' : ''}${iso === todayIso ? ' today' : ''}${lc}${S.canWrite && db ? ' hedit' : ''}" style="grid-row:1;grid-column:${d + 1}" title="${esc(iso === todayIso ? 'วันนี้ · ' + dl : dl)}" data-iso="${iso}"${hol ? ` data-hol="${esc(dl)}"` : ''}>${d}<small>${TH_WD[wd]}</small></div>`;
     }
     for (let ln = 0; ln < L; ln++) for (let d = 1; d <= 31; d++) {
       const cls = [d > dim ? 'void' : 'mc'];
@@ -1299,7 +1305,7 @@ function renderMonthCal(w0, w1) {
   if (out) notes.push(`อีก ${out} ภารกิจอยู่นอกช่วงที่แสดง`);
   if (noDate) notes.push(`${noDate} ภารกิจยังไม่ได้เลือกวัน`);
   if (!S.tl.showRed) { const n = S.allRows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
-  notes.push('คลิกภารกิจเพื่อดูรายละเอียด');
+  notes.push(S.canWrite && db ? 'คลิกภารกิจเพื่อดูรายละเอียด · คลิกหัววันที่เพื่อตั้ง แก้ชื่อ หรือยกเลิกวันหยุด' : 'คลิกภารกิจเพื่อดูรายละเอียด');
   $('#tlNote').textContent = notes.join(' · ');
   box.scrollLeft = 0;
 }
@@ -1431,8 +1437,34 @@ function applyFit() {
   $('#tlFit').hidden = !(S.tl.mode === 'cal' && !(isPhone() && S.tl.pv !== 'grid'));
 }
 const refreshTl = () => { renderTimeline(); applyFit(); };
+// ---------- holidays: edited on the month calendar header (edit mode), shared by everyone ----------
+const TH_WDF = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+function openHolidayEditor(anchor) {
+  const iso = anchor.dataset.iso, d = pd(iso), name = HOLIDAYS[iso] || '';
+  const label = `วัน${TH_WDF[d.getUTCDay()]}ที่ ${d.getUTCDate()} ${TH_MF[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
+  const p = document.createElement('div'); p.className = 'pop holpop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'วันหยุด');
+  p.innerHTML = `<div class="pophead">${esc(label)}</div>${name ? `<div class="holname">${esc(name)}</div>` : ''}<input type="text" id="holIn" maxlength="120" placeholder="ชื่อวันหยุด" value="${esc(name)}"><button type="button" class="mi" id="holSave">${name ? 'บันทึกชื่อวันหยุด' : 'ตั้งเป็นวันหยุด'}</button>${name ? '<button type="button" class="mi danger-t" id="holDel">ยกเลิกวันหยุด</button>' : ''}`;
+  showPop(p, anchor, false);
+  const inp = $('#holIn', p); inp.focus(); inp.select();
+  const save = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } closePop(); if (v !== name) setHoliday(iso, v, name ? 'rename' : 'add', label); };
+  $('#holSave', p).addEventListener('click', save);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+  if ($('#holDel', p)) $('#holDel', p).addEventListener('click', () => { closePop(); setHoliday(iso, '', 'remove', label); });
+}
+async function setHoliday(iso, name, how, label) {
+  const old = HOLIDAYS[iso] || '';
+  const next = { ...HOLIDAYS }; if (name) next[iso] = name; else delete next[iso];
+  HOLIDAYS = next; renderTimeline();
+  try {
+    await write('holidays', () => db.doc('settings/holidays').set({ map: next, updatedAt: new Date().toISOString(), updatedBy: S.me || '', updatedByName: S.loginName || '' }));
+    log({ action: 'holiday', label: `${label}${how === 'remove' ? ` · ยกเลิกวันหยุด (${old})` : how === 'add' ? ` · ตั้งเป็นวันหยุด: ${name}` : ` · ${old} → ${name}`}` });
+    toast(how === 'remove' ? 'ยกเลิกวันหยุดแล้ว' : 'บันทึกวันหยุดแล้ว');
+  } catch (_) { HOLIDAYS = { ...HOLIDAYS, [iso]: old }; if (!old) delete HOLIDAYS[iso]; renderTimeline(); toast('บันทึกวันหยุดไม่สำเร็จ'); }
+}
 $('#cal').addEventListener('click', (e) => {
   if (e.target.closest('.mev,.cbar,.ag-i')) return;
+  const hd = e.target.closest('.mdh[data-iso]');
+  if (hd && S.canWrite && db) { openHolidayEditor(hd); return; }
   const h = e.target.closest('[data-hol]'); if (!h) return;
   const p = document.createElement('div'); p.className = 'pop'; p.style.padding = '8px 12px'; p.style.fontSize = '13px'; p.setAttribute('role', 'status');
   p.textContent = h.dataset.hol; showPop(p, h, false);
@@ -1764,6 +1796,7 @@ function renderPanel() {
       else if (l.action === 'delete') act = 'ลบ ' + m;
       else if (l.action === 'version') { act = 'บันทึกฉบับ'; det = esc(l.label || ''); }
       else if (l.action === 'restore') { act = 'ย้อนแผนเป็นฉบับ'; det = esc(l.label || ''); }
+      else if (l.action === 'holiday') { act = 'แก้วันหยุด'; det = esc(l.label || ''); }
       else if (l.action === 'files') { act = 'วางลิงก์ไฟล์ปีงบ'; det = esc(l.label || ''); }
       else if (l.action === 'move') { act = `ย้ายปีงบ${l.mission ? ' (' + esc(l.mission) + ')' : ''}`; det = esc(`ปีงบ ${l.from || '-'} → ${l.to || '-'}`) + (l.label ? ' · ' + esc(l.label) : ''); }
       else if (l.action === 'import') { act = 'นำเข้าข้อมูลเริ่มต้น'; det = esc(l.label || ''); }
@@ -1815,7 +1848,7 @@ function renderAll() {
 renderAll();
 
 // ---------- login (soft lock in this browser; who can open the page is set in Share) ----------
-const CODE_HASH = 'ac5d85dfa17d29129796c9bcadf1727e4404d073a966582d29e78c88de47f80e';
+const CODE_HASH = '';
 const SESSION_MS = 60 * 60e3;
 let SESS = null; try { SESS = JSON.parse(localStorage.getItem('fm_sess') || 'null'); } catch (_) {}
 if (SESS && !(SESS.exp > Date.now() && SESS.name)) SESS = null;
@@ -1875,6 +1908,10 @@ S.loginName = SESS ? SESS.name : ''; setWho(); showLock(!SESS);
     local.forEach((r, id) => { if (!S.rawRows.some((x) => x.id === id) && S.pendingFocus === id) S.rawRows.push(r); });
     S.loaded = true; renderAll();
   }, () => { S.err = true; renderStatus(); toast('การเชื่อมต่อข้อมูลขาด โหลดหน้าใหม่อีกครั้ง'); });
+  db.collection('settings').onSnapshot((snap) => {
+    const d = snap.docs.find((x) => x.id === 'holidays'); const m = d && d.data().map;
+    HOLIDAYS = m && typeof m === 'object' ? { ...m } : { ...HOLIDAYS_DEFAULT }; renderTimeline();
+  }, () => {});
   db.collection('versions').orderBy('at', 'desc').limit(60).onSnapshot(async (snap) => { S.versions = snap.docs.map((d) => ({ id: d.id, ...d.data() })); await resolveNames(S.versions.map((v) => v.by)); if (S.panel === 'snaps') renderPanel(); }, () => {});
 })();
 })();
