@@ -378,23 +378,20 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .fychip.wait{color:#7A1A1A;background:#FDE8E8}
 </style>
 
-<div class="lock" id="lock" hidden>
-  <form class="lockbox" id="lockForm" autocomplete="off">
+<!-- shown instead of the plan while the access is checked, when this account may not use this web, or the login system
+     cannot be reached. Who may enter is decided by the login system of ฝูง.602 (eadmin), on every request. -->
+<div class="lock" id="lock">
+  <div class="lockbox">
     <div class="lockmark" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></div>
     <h2>ภารกิจต่างประเทศ ฝูง.602</h2>
-    <p>ใส่ชื่อผู้ใช้งานและรหัสเพื่อเปิดใช้งาน</p>
-    <label for="lockName" class="lbl">ชื่อผู้ใช้งาน</label>
-    <input id="lockName" type="text" placeholder="ร.อ.ธัญชนิต จินตภากร" autocomplete="name" maxlength="60">
-    <label for="lockIn" class="lbl">รหัสเปิดใช้งาน</label>
-    <input id="lockIn" type="password" placeholder="รหัสเปิดใช้งาน" autocomplete="current-password">
-    <div class="lockerr" id="lockErr" role="alert"></div>
-    <button class="primary" type="submit">เปิดใช้งาน</button>
-  </form>
+    <div class="lockerr" id="lockErr" role="alert">กำลังตรวจสิทธิ์…</div>
+    <button class="primary" type="button" id="lockGo" hidden>กลับหน้าเข้าสู่ระบบ</button>
+  </div>
 </div>
-<div class="wrap" id="app">
+<div class="wrap" id="app" hidden>
   <div class="appbar">
     <h1 id="appTitle">ภารกิจต่างประเทศ ฝูง.602 บน.6 · ปีงบประมาณ 70</h1>
-    <span class="who" id="who"></span><button type="button" class="lockbtn" id="filesBtn" hidden title="ลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของแต่ละปีงบ">ไฟล์ข้อมูล</button><button type="button" class="lockbtn" id="lockBtn" title="ล็อกหน้าจอ">ล็อก</button>
+    <span class="who" id="who"></span><button type="button" class="lockbtn" id="filesBtn" hidden title="ลิงก์ไฟล์ต้นทางและไฟล์แสดงผลของแต่ละปีงบ">ไฟล์ข้อมูล</button><button type="button" class="lockbtn" id="lockBtn" title="ออกจากระบบทุกเว็บของ ฝูง.602">ออกจากระบบ</button>
   </div>
   <div class="fybar" id="fyBar" hidden role="status"></div>
   <div class="ribbon" id="ribbon"></div>
@@ -445,6 +442,9 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
   </section>
 </div>
 
+<!-- the login system of ฝูง.602 (repo eadmin, same GitHub Pages site): one login for every web -->
+<script src="/eadmin/assets/config.js"></script>
+<script src="/eadmin/assets/app.js"></script>
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script>
@@ -537,7 +537,7 @@ function write(key, fn) {
   const prev = queues.get(key) || Promise.resolve();
   const next = prev.then(fn).then(() => { S.saving--; S.lastSave = new Date(); renderStatus(); }, (e) => {
     S.saving--; S.err = true; renderStatus();
-    if (e && e.code === 'invalid_argument') { S.canWrite = false; S.edit = false; renderAll(); toast('บัญชีนี้มีสิทธิ์ดูอย่างเดียว'); }
+    if (e && (e.code === 'invalid_argument' || e.code === 'forbidden')) { S.canWrite = false; S.edit = false; renderAll(); toast('บัญชีนี้มีสิทธิ์ดูอย่างเดียว'); }
     else if (e && e.code === 'quota_exceeded') toast('พื้นที่เก็บข้อมูลเต็ม');
     else toast('บันทึกไม่สำเร็จ ลองอีกครั้ง');
     throw e;
@@ -569,7 +569,7 @@ function statusHTML() {
   if (S.err) return '<span class="err">บันทึกไม่สำเร็จ ลองแก้ช่องนั้นอีกครั้ง</span>';
   if (S.saving) return '<span>กำลังบันทึก…</span>';
   if (S.edit) return S.lastSave ? `<span class="saved">✓ บันทึกแล้ว ${pad(S.lastSave.getHours())}:${pad(S.lastSave.getMinutes())} น.</span>` : '<span>ทุกการแก้ไขบันทึกเองทันที กด เสร็จสิ้น / บันทึกฉบับ เมื่อแก้เสร็จ</span>';
-  return `<span>${S.canWrite ? 'โหมดดู · กด แก้ไขแผน เพื่อแก้ไขตาราง' : 'ดูได้อย่างเดียว'}</span>`;
+  return `<span>${S.canWrite ? 'โหมดดู · กด แก้ไขแผน เพื่อแก้ไขตาราง' : 'บัญชีนี้มีสิทธิ์ดูอย่างเดียว (Viewer)'}</span>`;
 }
 function renderStatus() { const el = $('#rstatus'); if (el) el.innerHTML = statusHTML(); }
 function selRow() { return S.sel ? S.rows.find((r) => r.id === S.sel.id) : null; }
@@ -591,7 +591,7 @@ function renderRibbonPhone(r) {
   const view = `<div class="rseg" role="group" aria-label="มุมมอง"><button type="button" data-view="sheet" class="${S.view === 'sheet' ? 'on' : ''}">ตาราง</button><button type="button" data-view="tl" class="${S.view === 'tl' ? 'on' : ''}">ไทม์ไลน์</button></div>`;
   let h = '<div class="mbar">';
   if (S.edit) h += `<button type="button" id="addBtn">${IC.plus}เพิ่มภารกิจ</button><span class="sp"></span><button type="button" class="more" id="moreBtn" aria-label="เมนูเพิ่มเติม" aria-haspopup="menu">⋯</button><button type="button" class="primary" id="doneBtn">${IC.check}เสร็จสิ้น</button>`;
-  else h += `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก</button>${view}<span class="sp"></span><button type="button" class="more" id="moreBtn" aria-label="เมนูเพิ่มเติม" aria-haspopup="menu">⋯</button>`;
+  else h += `${S.canWrite ? `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก</button>` : ''}${view}<span class="sp"></span><button type="button" class="more" id="moreBtn" aria-label="เมนูเพิ่มเติม" aria-haspopup="menu">⋯</button>`;
   h += `</div><div class="statusline"><span id="rstatus">${statusHTML()}</span></div>`;
   r.innerHTML = h;
   const ctxMeta = () => (S.view === 'tl' ? { kind: 'tl' } : {});
@@ -620,7 +620,7 @@ function renderRibbon() {
   const view = `<div class="rseg" role="group" aria-label="มุมมอง"><button type="button" data-view="sheet" class="${S.view === 'sheet' ? 'on' : ''}">ตาราง</button><button type="button" data-view="tl" class="${S.view === 'tl' ? 'on' : ''}">ไทม์ไลน์</button></div>`;
   let h = '<div class="rbar"><div class="rscroll">';
   if (S.edit) { h += grp('ภารกิจ', `<button type="button" id="addBtn">${IC.plus}เพิ่มภารกิจ</button>`); h += fmtGroup(); }
-  h += grp('พิมพ์ / ส่งออก', `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก ${IC.caret}</button>`, 'tools');
+  if (S.canWrite) h += grp('พิมพ์ / ส่งออก', `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก ${IC.caret}</button>`, 'tools');
   h += grp('ฉบับและประวัติ', `<button type="button" id="snapBtn"${db ? '' : ' disabled'}>${IC.layers}ฉบับที่บันทึก</button><button type="button" id="logBtn"${db ? '' : ' disabled'}>${IC.clock}ประวัติการแก้ไข</button>`);
   if (!S.edit) h += grp('มุมมอง', view);
   h += '</div>';
@@ -1692,10 +1692,14 @@ function zipStore(files) {
 }
 
 async function save(filename, blob) {
-  if (!downloads) { toast('ดาวน์โหลดไม่ได้ในมุมมองนี้'); return; }
-  try { await downloads.save({ filename, data: blob }); toast('ดาวน์โหลดแล้ว'); }
-  catch (e) { if (e && e.code === 'declined') return; toast(e && e.code === 'rate_limited' ? 'รอสักครู่แล้วลองอีกครั้ง' : 'ดาวน์โหลดไม่สำเร็จ'); }
+  if (!downloads) { toast('ดาวน์โหลดไม่ได้ในมุมมองนี้'); return false; }
+  try { await downloads.save({ filename, data: blob }); toast('ดาวน์โหลดแล้ว'); return true; }
+  catch (e) { if (e && e.code === 'declined') return false; toast(e && e.code === 'rate_limited' ? 'รอสักครู่แล้วลองอีกครั้ง' : 'ดาวน์โหลดไม่สำเร็จ'); return false; }
 }
+// Viewer looks only: no PREVIEW and no PDF / Excel (the buttons are hidden too; the Apps Script refuses to log it)
+function mayExport() { if (S.canWrite) return true; toast('บัญชีนี้มีสิทธิ์ดูอย่างเดียว (Viewer) ส่งออกไฟล์ไม่ได้'); return false; }
+// a file given out goes into the history with the name of the account (EXPORT TO PDF / EXPORT TO EXCEL)
+const logExport = (kind, filename) => { if (window.APP_AUTH && window.APP_AUTH.exported) window.APP_AUTH.exported(kind, filename); };
 // e.g. "691104 1230TH-LT ภารกิจต่างประเทศปี70" (Thai year, Thai local time)
 const baseName = (meta) => {
   const d = meta.at ? new Date(meta.at) : new Date();
@@ -1703,14 +1707,19 @@ const baseName = (meta) => {
   return `${String((Number(p.year) + 543) % 100).padStart(2, '0')}${p.month}${p.day} ${p.hour}${p.minute}TH-LT ภารกิจต่างประเทศปี${S.fy}`;
 };
 window.__om = { buildXLSX: (rows, meta) => buildXLSX(rows, meta), baseName: (meta) => baseName(meta) };
-async function exportXLS(rows, meta) { try { await save(baseName(meta) + '.xlsx', buildXLSX(rows, meta)); } catch (e) { toast('สร้างไฟล์ Excel ไม่สำเร็จ'); } }
+async function exportXLS(rows, meta) {
+  if (!mayExport()) return;
+  try { const fn = baseName(meta) + '.xlsx'; if (await save(fn, buildXLSX(rows, meta))) logExport('xlsx', fn); } catch (e) { toast('สร้างไฟล์ Excel ไม่สำเร็จ'); }
+}
 async function exportPDF(rows, meta, c) {
+  if (!mayExport()) return;
   toast('กำลังสร้างไฟล์ PDF…');
-  try { c = c || await renderSheetCanvas(rows, meta); await save(baseName(meta) + '.pdf', await buildPDF(c)); } catch (e) { toast('สร้างไฟล์ PDF ไม่สำเร็จ'); }
+  try { c = c || await renderSheetCanvas(rows, meta); const fn = baseName(meta) + '.pdf'; if (await save(fn, await buildPDF(c))) logExport('pdf', fn); } catch (e) { toast('สร้างไฟล์ PDF ไม่สำเร็จ'); }
 }
 
 // ---------- PREVIEW ----------
 async function openPreview(rows, meta) {
+  if (!mayExport()) return;
   closePv(); closePop();
   const pv = document.createElement('div'); pv.className = 'pv'; pv.id = 'pv'; pv.setAttribute('role', 'dialog'); pv.setAttribute('aria-label', 'PREVIEW');
   pv.innerHTML = `<div class="pvbar"><h2>PREVIEW · A4 แนวนอน 1 หน้า${meta.kind === 'tl' ? ' · ' + esc(tlTitle()) : ''}${meta.label ? ' · ' + esc(meta.label) : ''}</h2><button type="button" id="pvXls"${meta.kind === 'tl' ? ' title="ไฟล์ Excel เป็นตารางภารกิจ"' : ''}>EXPORT TO EXCEL${meta.kind === 'tl' ? ' (ตาราง)' : ''}</button><button type="button" class="primary" id="pvPdf">EXPORT TO PDF</button><button type="button" id="pvClose">${IC.x}ปิด</button></div><div class="pvbody"><div class="pvinfo">กำลังจัดหน้า…</div></div>`;
@@ -1753,7 +1762,7 @@ function renderPanel() {
     if (!S.versions.length) h += '<div class="empty">ยังไม่มีฉบับที่บันทึก</div>';
     S.versions.forEach((v) => {
       const armed = S.armRestore === v.id;
-      h += `<div class="snap"><span class="nm">${esc(v.label || 'ฉบับ ' + fmtTH(v.at))}</span><span class="meta">${esc(fmtTH(v.at))} · ${esc(v.byName || nameOf(v.by))} · ${(v.rows || []).length} ภารกิจ</span><span class="acts"><button type="button" data-pv="${esc(v.id)}">${IC.eye}PREVIEW</button>${S.canWrite ? `<button type="button" class="danger${armed ? ' arm' : ''}" data-rs="${esc(v.id)}">${armed ? 'แตะอีกครั้งเพื่อย้อน' : 'ย้อนเป็นฉบับนี้'}</button>` : ''}</span></div>`;
+      h += `<div class="snap"><span class="nm">${esc(v.label || 'ฉบับ ' + fmtTH(v.at))}</span><span class="meta">${esc(fmtTH(v.at))} · ${esc(v.byName || nameOf(v.by))} · ${(v.rows || []).length} ภารกิจ</span><span class="acts">${S.canWrite ? `<button type="button" data-pv="${esc(v.id)}">${IC.eye}PREVIEW</button>` : ''}${S.canWrite ? `<button type="button" class="danger${armed ? ' arm' : ''}" data-rs="${esc(v.id)}">${armed ? 'แตะอีกครั้งเพื่อย้อน' : 'ย้อนเป็นฉบับนี้'}</button>` : ''}</span></div>`;
     });
     h += '</div>';
     p.innerHTML = h;
@@ -1771,7 +1780,8 @@ function renderPanel() {
       h += `<div class="snap"><span class="nm">ปีงบ ${fy}${fy === cur ? ' · ปีงบปัจจุบัน' : ''}</span><span class="meta"><a href="${link(f.src)}" target="_blank" rel="noopener">${esc(f.srcName || 'ไฟล์ต้นทาง')}</a><br><a href="${link(f.disp)}" target="_blank" rel="noopener">${esc(f.dispName || 'ไฟล์แสดงผล')}</a></span></div>`;
     });
     h += '</div>';
-    if (S.canWrite) {
+    // pasting the links of a fiscal year: the main admin of the login system only (and the admin code), checked by the Apps Script
+    if (S.isSuper) {
       const opts = [cur, cur + 1].filter((v, i, a) => a.indexOf(v) === i);
       if (!opts.includes(target)) opts.push(target);
       h += `<h3 class="fyh">วางลิงก์ไฟล์ของปีงบ</h3><p class="pdesc">สร้าง Google Sheets ว่าง 2 ไฟล์ เช่น <b>รวมภารกิจต่างประเทศ ปีงบ${target}_ต้นทาง</b> และ <b>รวมภารกิจต่างประเทศ ปีงบ${target}_แสดงผล</b> บัญชีที่ Deploy สคริปต์ต้องแก้ไขทั้ง 2 ไฟล์ได้ แล้ววางลิงก์ด้านล่าง</p>
@@ -1797,7 +1807,7 @@ function renderPanel() {
       finally { S.ffBusy = false; renderPanel(); }
     });
   } else if (S.panel === 'logs') {
-    let h = `<div class="phead"><h2>ประวัติการแก้ไข</h2><button type="button" class="ghost" id="pClose">${IC.x}ปิด</button></div><p class="pdesc">ทุกการแก้ไขช่อง จัดรูปแบบ ย้ายแถว เพิ่ม ลบ บันทึกฉบับ และย้อนฉบับ แสดง 200 รายการล่าสุด ส่วนนี้ไม่แสดงใน PREVIEW, PDF และ Excel</p><div class="logs">`;
+    let h = `<div class="phead"><h2>ประวัติการแก้ไข</h2><button type="button" class="ghost" id="pClose">${IC.x}ปิด</button></div><p class="pdesc">ทุกการแก้ไขช่อง จัดรูปแบบ ย้ายแถว เพิ่ม ลบ บันทึกฉบับ ย้อนฉบับ และการส่งออก PDF / Excel แสดง 200 รายการล่าสุด ส่วนนี้ไม่แสดงใน PREVIEW, PDF และ Excel</p><div class="logs">`;
     if (!S.logsLoaded) h += '<div class="empty">กำลังโหลด…</div>';
     else if (!S.logs.length) h += '<div class="empty">ยังไม่มีประวัติการแก้ไข</div>';
     let day = '';
@@ -1817,6 +1827,7 @@ function renderPanel() {
       else if (l.action === 'files') { act = 'วางลิงก์ไฟล์ปีงบ'; det = esc(l.label || ''); }
       else if (l.action === 'move') { act = `ย้ายปีงบ${l.mission ? ' (' + esc(l.mission) + ')' : ''}`; det = esc(`ปีงบ ${l.from || '-'} → ${l.to || '-'}`) + (l.label ? ' · ' + esc(l.label) : ''); }
       else if (l.action === 'import') { act = 'นำเข้าข้อมูลเริ่มต้น'; det = esc(l.label || ''); }
+      else if (l.action === 'export') { act = esc(l.field || 'ส่งออกไฟล์'); det = esc(l.label || ''); }
       h += `<div class="lg"><time>${tm}</time><span><span class="by">${esc(l.byName || nameOf(l.by))}</span> ${act}</span>${det ? `<span class="det">${det}</span>` : ''}</div>`;
     });
     h += '</div>'; p.innerHTML = h;
@@ -1864,48 +1875,58 @@ function renderAll() {
 }
 renderAll();
 
-// ---------- login (soft lock in this browser; who can open the page is set in Share) ----------
-const CODE_HASH = '';
-const SESSION_MS = 60 * 60e3;
-let SESS = null; try { SESS = JSON.parse(localStorage.getItem('fm_sess') || 'null'); } catch (_) {}
-if (SESS && !(SESS.exp > Date.now() && SESS.name)) SESS = null;
-let lastName = ''; try { lastName = localStorage.getItem('fm_name') || ''; } catch (_) {}
-async function sha256(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+// ---------- the login (ระบบ Login กลาง ฝูง.602) ----------
+// No login in this browser: to the login page, and back here after it. The hour of a login, a login from another
+// device and signing out in another tab are watched by App.watch (eadmin/assets/app.js), the same as on every web.
+// The name shown and written in the history is the column ชื่อ-สกุล of the account, given by the Apps Script after it
+// asked the login system; Admin / Editor edit, Viewer looks only, the main admin may paste the links of a fiscal year.
+const AUTH = window.App || null;
 function setWho() { $('#who').textContent = S.loginName ? 'ผู้ใช้งาน: ' + S.loginName : ''; }
-function showLock(on, msg) {
+function showLock(on, msg, back) {
   $('#lock').hidden = !on; $('#app').hidden = on;
-  $('#lockErr').textContent = msg || '';
-  if (on) { closePanel(); closePop(); $$('.bs-scrim,.pv').forEach((e) => e.remove()); setTimeout(() => { const n = $('#lockName'), i = $('#lockIn'); n.value = lastName; i.value = ''; (n.value ? i : n).focus(); }, 30); }
+  if (on) { closePanel(); closePop(); $$('.bs-scrim,.pv').forEach((e) => e.remove()); $('#lockErr').textContent = msg || ''; $('#lockGo').hidden = !back; }
 }
-const AUTH = window.APP_AUTH || null;
-function lockNow(msg) { if (AUTH) { try { AUTH.logout(); } catch (_) {} } SESS = null; S.loginName = ''; try { localStorage.removeItem('fm_sess'); } catch (_) {} if (S.edit) { S.edit = false; renderAll(); } setWho(); showLock(true, msg); }
-$('#lockForm').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const nm = $('#lockName').value.trim(), code = $('#lockIn').value.trim();
-  if (!nm) { $('#lockErr').textContent = 'กรุณาใส่ชื่อผู้ใช้งาน'; $('#lockName').focus(); return; }
-  const btn = $('#lockForm button'); btn.disabled = true;
-  try {
-    if (AUTH) {
-      $('#lockErr').textContent = 'กำลังตรวจสอบ…';
-      const r = await AUTH.login(nm, code);
-      SESS = { name: r.name || nm.slice(0, 60), exp: r.exp || Date.now() + SESSION_MS };
-    } else {
-      let ok = false; try { ok = (await sha256(code)) === CODE_HASH; } catch (_) {}
-      if (!ok) throw new Error('รหัสไม่ถูกต้อง');
-      SESS = { name: nm.slice(0, 60), exp: Date.now() + SESSION_MS };
-    }
-  } catch (e) { $('#lockErr').textContent = (e && e.message) || 'เข้าใช้งานไม่สำเร็จ'; $('#lockIn').select(); return; }
-  finally { btn.disabled = false; }
-  lastName = SESS.name;
-  try { localStorage.setItem('fm_sess', JSON.stringify(SESS)); localStorage.setItem('fm_name', lastName); } catch (_) {}
-  S.loginName = SESS.name; setWho(); showLock(false); renderAll();
-});
-$('#lockBtn').addEventListener('click', () => lockNow());
+$('#lockGo').addEventListener('click', () => { if (AUTH) location.href = AUTH.loginUrl().split('?')[0]; });
+function applyMe() {
+  const me = window.APP_AUTH && window.APP_AUTH.me(); if (!me) return;
+  if (S.canWrite && !me.edit) { S.edit = false; S.sel = null; S.armDel = null; closePv(); }
+  S.canWrite = me.edit; S.isSuper = me.super; S.role = me.role; S.loginName = me.name; setWho(); renderAll();
+}
+window.addEventListener('app-me', applyMe);
+window.addEventListener('app-toast', (e) => { if (e.detail) toast(e.detail); });
+// this account has no access to this web, or the web is closed (ข้อ 1.14.3.1)
+function denied(msg) { S.denied = true; S.edit = false; S.canWrite = false; showLock(true, msg || 'บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้ ให้ติดต่อ Admin', true); }
+window.addEventListener('app-denied', (e) => denied(e.detail));
+// the login is over (its hour, the password changed, another device took the account): the login system is asked
+// directly, and sends this browser to the login page with the reason; it comes back here after the next login
+function onAuthLost() {
+  if (!AUTH || !AUTH.session()) { if (AUTH) AUTH.toLogin(); return; }
+  if (S.edit) { S.edit = false; renderAll(); }
+  AUTH.api('me').then(() => window.APP_AUTH.renew()).catch(() => {});
+}
+window.addEventListener('app-auth-lost', onAuthLost);
+$('#lockBtn').addEventListener('click', () => { if (AUTH) AUTH.signOut(); });
 $('#filesBtn').addEventListener('click', () => { S.filesFy = null; S.ffErr = ''; openPanel('files'); });
-setInterval(() => { if (SESS && SESS.exp <= Date.now()) lockNow('ครบ 1 ชั่วโมง กรุณาใส่รหัสใหม่'); }, 5000);
-if (SESS && AUTH && !AUTH.valid()) SESS = null;
-window.addEventListener('app-auth-lost', () => { if (SESS) lockNow('หมดเวลาใช้งาน กรุณาใส่รหัสใหม่'); });
-S.loginName = SESS ? SESS.name : ''; setWho(); showLock(!SESS);
+async function startApp() {
+  S.denied = false; showLock(true, 'กำลังตรวจสิทธิ์…');
+  try { await window.APP_AUTH.start(); }
+  catch (e) {
+    // no access, or the web closed: the message of the login system; the login over: App has gone to the login page
+    if (e && (e.code === 'no_web' || e.code === 'web_closed' || e.code === 'wrong_web')) { denied(e.message); return; }
+    if (e && e.code === 'auth') return;
+    showLock(true, (e && e.message) || 'ตรวจสิทธิ์ไม่สำเร็จ', false); setTimeout(startApp, 10000); return;
+  }
+  if (S.denied) return;
+  if (!window.APP_AUTH.me()) { showLock(true, 'โหลดข้อมูลไม่สำเร็จ จะลองใหม่อีกครั้ง', false); setTimeout(startApp, 10000); return; }
+  showLock(false); applyMe();
+}
+if (!AUTH || !AUTH.hasBackend || !window.APP_AUTH) showLock(true, 'ไม่พบระบบ Login กลาง (eadmin) หน้านี้จึงยังใช้งานไม่ได้', false);
+else if (!AUTH.session()) AUTH.toLogin();
+else {
+  // the login of this browser changed in another tab: signed out, or another account signed in
+  AUTH.watch((s, was) => { if (!s) { AUTH.toLogin(); return; } if (was && s.token !== was) location.reload(); });
+  startApp();
+}
 
 (async () => {
   const use = (n) => (window.claude && window.claude.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
@@ -1915,7 +1936,7 @@ S.loginName = SESS ? SESS.name : ''; setWho(); showLock(!SESS);
   if (user) {
     try { S.me = await user.id(); } catch (_) {}
     const cw = await (user.can ? user.can('data.write').catch(() => null) : null);
-    S.canWrite = cw !== false;
+    S.canWrite = cw === true;                              // the Role in this web, from the login system (applyMe)
     try { const me = await user.me(); if (me && me.id) S.names[me.id] = me.name || ''; } catch (_) {}
   } else S.canWrite = true;
   renderAll();

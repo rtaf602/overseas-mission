@@ -1,0 +1,54 @@
+# ภารกิจต่างประเทศ ฝูง.602 (overseas-mission) — คู่มือสำหรับผู้แก้โค้ด
+
+อ่านไฟล์นี้ก่อนแก้อะไรใน repo นี้ **ตอบผู้ใช้เป็นภาษาไทย** ผู้ใช้เป็นเจ้าหน้าที่ของ ฝูง.602 ไม่ใช่โปรแกรมเมอร์
+
+## เว็บนี้ใช้ระบบ Login กลาง (ตั้งแต่ 12 พ.ย. 2026)
+
+ใครเข้าได้และทำอะไรได้ **ไม่ได้ตัดสินใน repo นี้** แต่ตัดสินโดยระบบ Login กลางของ ฝูง.602 (repo `rtaf602/eadmin` หน้าเว็บอยู่ที่ `/eadmin/` ของ GitHub Pages เดียวกัน)
+ไม่มีรหัสเปิดใช้งาน (`ACCESS_CODE`, `CODE_HASH`) และช่องพิมพ์ชื่อผู้ใช้งานแล้ว **ห้ามเพิ่มกลับ**
+
+| Role ในเว็บนี้ (Admin หลักกำหนดในหน้า Admin รหัสเว็บ `WEB10`) | ทำได้ |
+|---|---|
+| Admin, Editor | ดู แก้ไขแผน บันทึกฉบับ ย้อนฉบับ แก้วันหยุด PREVIEW และส่งออก PDF / Excel |
+| Viewer | ดูอย่างเดียว ดูประวัติและฉบับที่บันทึกได้ ไม่มี PREVIEW และส่งออก (ผู้ใช้สั่ง 12 พ.ย. 2026) |
+| ไม่มีสิทธิ์ / เว็บถูกปิด | เข้าไม่ได้ เห็นข้อความ "บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้ ให้ติดต่อ Admin" |
+
+**วางลิงก์ไฟล์ปีงบใหม่** (`setFiles`, ปุ่ม ไฟล์ข้อมูล): เฉพาะบัญชี **Admin หลัก** ของระบบ Login (`super` ที่ `web.check` ตอบ) **และ**ต้องใส่รหัส admin (`ADMIN_HASH` ตั้งด้วย `setCodes`) ทั้งสองอย่าง (ผู้ใช้สั่ง 12 พ.ย. 2026)
+Admin ของเว็บนี้ที่ไม่ใช่ Admin หลักวางลิงก์ไม่ได้ แม้รู้รหัส admin
+
+## ส่วนที่เป็นของระบบ Login (ห้ามแก้ ห้ามถอด)
+
+หน้าเว็บ `index.html`
+- `<script src="/eadmin/assets/config.js">` และ `<script src="/eadmin/assets/app.js">` (`window.App`) ก่อน `config.js` และ `api.js`
+- ส่วน "the login" ท้ายไฟล์: ไม่มีการ Login → `App.toLogin()` มีแล้ว → `App.watch()` แล้ว `startApp()`
+  `App.watch` ดูแลการหมดเวลา 1 ชั่วโมง การ Login ซ้อนจากเครื่องอื่น (แถบแดงด้านบนพร้อมปุ่มไม่อนุญาต) และการออกจากระบบในแท็บอื่น
+- `applyMe()`: `S.canWrite`, `S.isSuper`, `S.loginName` มาจากคำตอบของ Apps Script (`sync` → `me`) ไม่ใช่จากหน้าเว็บ
+- `denied()`, `onAuthLost()`, `showLock()`, `#lock`, `#lockGo`: การ Login หมด / ไม่มีสิทธิ์
+- ปุ่ม "ออกจากระบบ" (`#lockBtn` → `App.signOut`) ออกจากทุกเว็บ
+- `mayExport()`: Viewer ไม่มี PREVIEW และส่งออก (ซ่อนปุ่มด้วย) `logExport()` ส่งการส่งออกไปบันทึกประวัติ
+- ฟอร์มวางลิงก์ปีงบแสดงเมื่อ `S.isSuper` เท่านั้น (การตรวจจริงอยู่ที่ Apps Script)
+
+`api.js`
+- `AUTH`, `SESS()`, `getPass()`, `PASSV()`: ขอ "บัตรผ่าน" ของเว็บนี้จาก `App.enterWeb(CONF.webCode)` แล้วส่ง `pass` ไปกับ**ทุก**คำขอ **ห้ามส่ง session ของ Login ไป Apps Script ของเว็บนี้**
+- `setMe()` / event `app-me`, `app-denied`, `app-auth-lost`, `app-toast`; `APP_AUTH.start()`, `renew()`, `me()`, `exported()`
+
+Apps Script `apps-script/Code.gs`
+- `CFG.LOGIN_URL` (จำไว้ใน Script Property `LOGIN_URL` ตอน `setup`), `CFG.WEB_CODE` (`WEB10` ต้องตรงกับ `webCode` ใน `config.js`), `CFG.CHECK_SEC`
+- `doPost`: **ทุก** action ผ่าน `auth_(req.pass, FRESH[action])` ก่อน แล้วตรวจ `EDIT` (Admin / Editor) `setFiles` ตรวจ `s.super` และรหัส admin เพิ่ม
+- `auth_()`: ส่ง pass ไปถามระบบ Login (`web.check`) ด้วย `UrlFetchApp` เก็บคำตอบใน cache ตาม `CHECK_SEC` เฉพาะ action ที่อ่านอย่างเดียว ที่ cache เก็บแค่เครื่องหมายของ pass
+- ชื่อผู้บันทึก (`s.name`) = คอลัมน์ `ชื่อ-สกุล` (ไม่มียศ) ของแถวบัญชีนั้นใน LOGIN DATABASE ที่ระบบ Login ตอบมา ใช้เป็น `updatedByName` ของภารกิจ, `byName` ในประวัติ, `by` ของฉบับและของการวางลิงก์ **ไม่ใช่จากที่หน้าเว็บส่งมา**
+- `exported`: EXPORT TO PDF / EXPORT TO EXCEL ลงแท็บ `logs` ของปีงบที่แสดงอยู่ (action `export`, field = ชนิด, label = ชื่อไฟล์)
+- `setup()` ตรวจว่าระบบ Login ตอบ และลบ `CODE_HASH` เดิม `setCodes()` ตั้งได้เฉพาะรหัส admin
+
+## กติกาเมื่อเพิ่มความสามารถใหม่
+
+1. action ใหม่ใน `API` ผ่าน `auth_` อยู่แล้วโดยอัตโนมัติ ถ้า action นั้นเปลี่ยนข้อมูล สร้างไฟล์ หรือส่งข้อมูลออก ให้ใส่ใน `EDIT` และ `FRESH` ด้วย
+2. การห้ามของ Viewer ต้องอยู่ที่ Apps Script เสมอ การซ่อนปุ่มเป็นแค่ความสะดวก
+3. ห้ามเพิ่มช่องให้พิมพ์ชื่อผู้ใช้หรือรหัสเปิดใช้งาน ห้ามเก็บ session หรือ pass ลง Sheet หรือ Script Property
+4. การเปลี่ยนวิธี Login, Role หรือข้อความของระบบ Login ต้องทำที่ repo `eadmin` ไม่ใช่ที่นี่
+5. repo นี้เป็นสาธารณะ ห้ามใส่ข้อมูลแผนภารกิจ รหัส หรือข้อมูลลับเพิ่มลงในไฟล์
+
+## ทดสอบ
+
+ชุดทดสอบร่วมอยู่ใน repo eadmin (`test/web_overseas.mjs` ต้อง clone repo นี้ไว้ข้าง ๆ eadmin) ผ่านทั้งหมดเมื่อ 12 พ.ย. 2026 บนตัวจำลอง ยังไม่เคยรันบน Google จริง
+สิ่งที่ตัวจำลองยืนยันไม่ได้: เวลาที่ `UrlFetchApp` ใช้ถามระบบ Login และโควตา `UrlFetchApp` ต่อวัน (หน้าเว็บถาม `sync` ทุก 5 วินาที แต่ถามระบบ Login ไม่เกินนาทีละครั้งต่อการ Login)
