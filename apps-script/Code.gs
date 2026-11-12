@@ -5,9 +5,10 @@
  * (Extensions > Apps Script) แล้วรัน setup() หนึ่งครั้ง จากนั้น Deploy เป็น Web app
  *
  * - แต่ละปีงบมีไฟล์ "ต้นทาง" ของตัวเอง (แท็บ missions, logs, snapshots) และไฟล์ "แสดงผล" (แท็บชื่อเลขปีงบ)
- * - ไฟล์ปีงบถัดไปวางลิงก์จากหน้าเว็บได้ (ปุ่ม "ไฟล์ข้อมูล" + รหัส admin) ไม่ต้องแก้โค้ด
+ * - ไฟล์ปีงบถัดไปวางลิงก์จากหน้าเว็บได้ (ปุ่ม "ไฟล์ข้อมูล": เฉพาะ Admin หลักของระบบ Login + รหัส admin) ไม่ต้องแก้โค้ด
  * - ภารกิจถูกจัดเข้าปีงบตามวันปฏิบัติภารกิจเอง (ดู placeFys_)
- * - รหัสเปิดใช้งานและรหัส admin ไม่อยู่ในไฟล์นี้: ตั้งด้วยฟังก์ชัน setCodes() ใน Apps Script
+ * - ใครเข้าได้และทำอะไรได้ ตัดสินโดยระบบ Login กลางของ ฝูง.602 (repo eadmin) ทุกคำขอ ดูหัวข้อ "auth" ด้านล่าง
+ * - รหัส admin (วางลิงก์ปีงบใหม่) ไม่อยู่ในไฟล์นี้: ตั้งด้วยฟังก์ชัน setCodes() ใน Apps Script
  * - ไฟล์ "แสดงผล" ถูกวาดใหม่จากข้อมูลต้นทางหลังทุกการแก้ไข (อ่านอย่างเดียว)
  * - กด "บันทึกฉบับ" แล้วเก็บไฟล์ Excel ในโฟลเดอร์ Backup ไว้ 20 ไฟล์ล่าสุด
  */
@@ -15,20 +16,17 @@
 /* ====================== ตั้งรหัส (ทำก่อน setup) ====================== */
 
 /**
- * ตั้ง/เปลี่ยนรหัส: พิมพ์รหัสในเครื่องหมาย '' ด้านล่าง แล้วกด Run ฟังก์ชันนี้
+ * ตั้ง/เปลี่ยนรหัส admin: พิมพ์รหัสในเครื่องหมาย '' ด้านล่าง แล้วกด Run ฟังก์ชันนี้
  * ระบบเก็บรหัสไว้ฝั่ง Google (Script Properties) แล้ว ให้ลบรหัสออกจากโค้ดและกดบันทึก
  * อย่า commit รหัสลง GitHub
- *  - ACCESS_CODE: รหัสเปิดใช้งานหน้าเว็บ (ทุกคน)
- *  - ADMIN_CODE: รหัส admin สำหรับวางลิงก์ไฟล์ปีงบใหม่เท่านั้น
- * เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนรหัสนั้น
+ *  - ADMIN_CODE: รหัส admin สำหรับวางลิงก์ไฟล์ปีงบใหม่เท่านั้น ใช้ได้เฉพาะบัญชี Admin หลักของระบบ Login
+ * (รหัสเปิดใช้งานหน้าเว็บเดิมไม่มีแล้ว: เข้าใช้งานด้วยระบบ Login กลาง)
  */
 function setCodes() {
-  const ACCESS_CODE = '';
   const ADMIN_CODE = '';
   const p = PropertiesService.getScriptProperties();
-  if (ACCESS_CODE) { p.setProperty('CODE_HASH', sha256_(ACCESS_CODE.trim())); Logger.log('ตั้งรหัสเปิดใช้งานแล้ว'); }
   if (ADMIN_CODE) { p.setProperty('ADMIN_HASH', sha256_(ADMIN_CODE)); Logger.log('ตั้งรหัส admin แล้ว'); }
-  if (!ACCESS_CODE && !ADMIN_CODE) Logger.log('ยังไม่ได้ใส่รหัสใน setCodes');
+  else Logger.log('ยังไม่ได้ใส่รหัสใน setCodes');
   Logger.log('อย่าลืมลบรหัสออกจากโค้ดแล้วกดบันทึก');
 }
 
@@ -39,7 +37,11 @@ const CFG = {
   BACKUP_FOLDER_ID: '1TCrfUJcOVO5Tu61eKnV3w_AYxYwHywp7',          // รวมภารกิจต่างประเทศ Backup
   KEEP_BACKUPS: 20,
   KEEP_SNAPS: 20,
-  SESSION_SEC: 3600,                 // ใส่รหัสแล้วใช้ได้ 1 ชั่วโมง
+  // ระบบ Login กลาง: ที่อยู่ระบบหลังบ้านของระบบ Login (ค่าเดียวกับ backendUrl ในไฟล์ eadmin/docs/assets/config.js)
+  // กรอกในหน้า Apps Script แล้ว Run setup ครั้งเดียว ระบบจำไว้เอง (ช่องนี้ว่างไว้ได้ในโค้ดบน GitHub)
+  LOGIN_URL: '',
+  WEB_CODE: 'WEB10',                 // รหัสเว็บนี้ในรายชื่อเว็บของหน้า Admin (ต้องตรงกับ webCode ใน config.js)
+  CHECK_SEC: 60,                     // อ่านอย่างเดียว: ถามระบบ Login ซ้ำทุก 60 วินาที / การแก้ไขทุกครั้งถามใหม่เสมอ
   LOG_DAYS: 0,                       // 0 = เก็บประวัติการแก้ไขไว้ตลอด (แต่ละปีงบมีไฟล์ของตัวเองอยู่แล้ว)
   TZ: 'Asia/Bangkok',
   TITLE: 'ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ ',
@@ -63,9 +65,10 @@ function doGet() {
 function doPost(e) {
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const fn = API[req.action];
+    const fn = Object.prototype.hasOwnProperty.call(API, req.action) ? API[req.action] : null;
     if (!fn) throw err_('bad_action', 'ไม่รู้จักคำสั่ง ' + req.action);
-    const sess = req.action === 'login' ? null : auth_(req.token);
+    const sess = auth_(req.pass, !!FRESH[req.action]);
+    if (EDIT[req.action] && !sess.edit) throw err_('forbidden', 'บัญชีนี้มีสิทธิ์ดูอย่างเดียว (Viewer) แก้ไขแผนและส่งออกไฟล์ไม่ได้');
     return json_(fn(req, sess) || { ok: true });
   } catch (x) {
     return json_({ error: { code: (x && x.code) || 'server', message: (x && x.message) || String(x) } });
@@ -77,23 +80,19 @@ function err_(code, message) { const e = new Error(message); e.code = code; retu
 
 /* =========================== API =========================== */
 
+// Editor and Admin only: these change the plan, keep a version, redraw the display file, or log a file given out
+const EDIT = { write: 1, save: 1, setHolidays: 1, render: 1, setFiles: 1, exported: 1 };
+// these ask the login system afresh, not from the copy kept for CFG.CHECK_SEC
+const FRESH = { write: 1, save: 1, setHolidays: 1, setFiles: 1, exported: 1 };
+
 const API = {
-  login: function (r) {
-    const name = String(r.name || '').trim().slice(0, 60);
-    if (!name) throw err_('no_name', 'กรุณาใส่ชื่อผู้ใช้งาน');
-    const want = prop_('CODE_HASH');
-    if (!want) throw err_('no_code', 'ยังไม่ได้ตั้งรหัสเปิดใช้งาน (รัน setCodes ใน Apps Script)');
-    if (sha256_(String(r.code || '').trim()) !== want) { Utilities.sleep(700); throw err_('bad_code', 'รหัสไม่ถูกต้อง'); }
-    const token = Utilities.getUuid().replace(/-/g, '');
-    CacheService.getScriptCache().put('tok:' + token, JSON.stringify({ name: name }), CFG.SESSION_SEC);
-    return { token: token, name: name, exp: Date.now() + CFG.SESSION_SEC * 1000 };
-  },
 
   // ส่งข้อมูลกลับเฉพาะเมื่อมีการเปลี่ยนแปลงหลังเวอร์ชันที่หน้าเว็บถืออยู่
   // ไฟล์ทุกปีงบ + ภารกิจของทุกปีงบ (ไทม์ไลน์แสดงคร่อมปีงบได้)
-  sync: function (r) {
+  sync: function (r, s) {
     const v = ver_(), files = files_();
-    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files };
+    // me: the name (column ชื่อ-สกุล), the Role in this web and whether this is the main admin, from the login system
+    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files, me: { name: s.name, role: s.role, super: s.super, owner: s.owner } };
     if (Number(r.ver) !== v) {
       out.missions = {};
       Object.keys(files).forEach(function (fy) { try { out.missions[fy] = readMissions_(fy); } catch (x) { out.missions[fy] = []; } });
@@ -111,6 +110,14 @@ const API = {
         const id = String(o.id || '');
         if (!/^[A-Za-z0-9_\-]{1,60}$/.test(id)) throw err_('bad_id', 'รหัสภารกิจไม่ถูกต้อง');
         const had = fysOf_(st, id), cur = had.length ? st.maps[had[0]][id] : null;
+        // an Editor: only the missions this account is responsible for (ผู้รับผิดชอบ), adds new ones as its own, deletes none
+        if (!s.admin) {
+          if (o.op === 'delete') throw err_('not_owner', 'Editor ลบภารกิจไม่ได้ ให้ติดต่อ Admin ของเว็บนี้');
+          if (cur && !isMine_(cur.owner, s)) throw err_('not_owner', 'แก้ไขได้เฉพาะภารกิจที่ท่านเป็นผู้รับผิดชอบ (' + (cur.owner || 'ยังไม่ระบุผู้รับผิดชอบ') + ')');
+          // a new mission is its own; its own mission it may hand to somebody else (then it can no longer edit it, user 12 Nov 2026)
+          const has = o.data && Object.prototype.hasOwnProperty.call(o.data, 'owner');
+          if (!cur || (o.op !== 'update' && !has)) o.data = Object.assign({}, o.data || {}, { owner: s.owner });
+        }
         if (o.op === 'delete') { had.forEach(function (fy) { delete st.maps[fy][id]; st.dirty[fy] = 1; }); return; }
         let row;
         if (o.op === 'update') { if (!cur) return; row = merge_(cur, o.data || {}); }
@@ -149,12 +156,23 @@ const API = {
     return { list: snapList_(fyArg_(r.fy)) };
   },
 
+  // a PDF or Excel file was made in the page: into the history of that fiscal year with the name of the account
+  exported: function (r, s) {
+    if (!s.super) throw err_('not_super', 'PREVIEW และส่งออกไฟล์ได้เฉพาะ Admin หลัก');
+    const kind = r.kind === 'pdf' ? 'EXPORT TO PDF' : r.kind === 'xlsx' ? 'EXPORT TO EXCEL' : '';
+    if (!kind) throw err_('bad_request', 'ไม่รู้จักชนิดไฟล์');
+    const fy = fyArg_(r.fy);
+    appendLogs_(fy, [logRow_({ action: 'export', field: kind, label: String(r.filename || '').slice(0, 120) }, s.name)]);
+    return { ok: true };
+  },
+
   listLogs: function (r) {
     return { list: logsList_(fyArg_(r.fy), Math.min(1000, Number(r.limit) || 200)) };
   },
 
   // วันหยุดราชการ (ใช้ร่วมกันทุกปีงบ) เก็บในแท็บ holidays ของไฟล์ต้นทางปีงบแรก
-  setHolidays: function (r) {
+  setHolidays: function (r, s) {
+    if (!s.super) throw err_('not_super', 'แก้วันหยุดราชการได้เฉพาะ Admin หลัก');
     const m = r.map || {}, rows = [['date', 'name']];
     Object.keys(m).sort().forEach(function (k) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) throw err_('bad_date', 'วันที่ไม่ถูกต้อง');
@@ -173,6 +191,8 @@ const API = {
 
   // วางลิงก์ไฟล์ต้นทาง + ไฟล์แสดงผลของปีงบ (จากหน้าเว็บ)
   setFiles: function (r, s) {
+    // the main admin of the login system only (user, 12 Nov 2026), and the admin code as well
+    if (!s.super) throw err_('not_super', 'วางลิงก์ไฟล์ปีงบได้เฉพาะ Admin หลักของระบบ Login');
     const want = prop_('ADMIN_HASH');
     if (!want) throw err_('no_admin', 'ยังไม่ได้ตั้งรหัส admin (รัน setCodes ใน Apps Script)');
     if (sha256_(String(r.admin || '')) !== want) { Utilities.sleep(1500); throw err_('bad_admin', 'รหัส admin ไม่ถูกต้อง'); }
@@ -272,11 +292,61 @@ function rebalance_(by) {
 
 /* =========================== helpers =========================== */
 
-function auth_(token) {
-  const raw = token && CacheService.getScriptCache().get('tok:' + token);
-  if (!raw) throw err_('auth', 'หมดเวลาใช้งาน กรุณาใส่รหัสใหม่');
-  return JSON.parse(raw);
+/* Who is asking, and may they? Decided by the login system of ฝูง.602 (repo eadmin), never here and never in the page.
+   The page gets a pass for this web from the login system (App.enterWeb) and sends it with every request; this script
+   sends it on to the login system (op web.check) with the code of this web, and gets back the person, the Role in this
+   web (Admin / Editor edit, Viewer looks only) and whether it is the main admin. No access, the web closed, the hour
+   over, the password changed, the account taken by another device: refused, every time. The pass is good for that
+   question about this web only: this script never sees the login itself, so it cannot be used for the Admin page or
+   another web. An answer is kept for CFG.CHECK_SEC for the questions that only read (sync, lists); everything that
+   changes the plan asks afresh (FRESH). Only a mark of the pass is kept here, never the pass itself. */
+function loginUrl_() {
+  return String(prop_('LOGIN_URL') || CFG.LOGIN_URL || '').trim();
 }
+// the address of a deployed Apps Script web app, nothing else: the pass is only ever sent there
+function loginUrlOk_(url) { return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url); }
+function auth_(pass, fresh) {
+  pass = String(pass || '');
+  if (!pass || pass.length > 800) throw err_('auth', 'ให้เข้าสู่ระบบ');
+  // a pass for another web: config.js (webCode) and CFG.WEB_CODE do not agree. Said plainly, so it is found at once.
+  let w = '';
+  try { w = String(JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(pass.split('.')[0])).getDataAsString()).w || ''); } catch (x) { w = ''; }
+  if (w && w !== CFG.WEB_CODE) throw err_('wrong_web', 'รหัสเว็บในไฟล์ config.js (' + w + ') ไม่ตรงกับ CFG.WEB_CODE ใน Apps Script (' + CFG.WEB_CODE + ') ให้แก้ให้ตรงกัน');
+  const key = sha256_('overseas|' + pass).slice(0, 32), cache = CacheService.getScriptCache();
+  if (!fresh) { const hit = cache.get('who:' + key); if (hit) return JSON.parse(hit); }
+  const url = loginUrl_();
+  if (!loginUrlOk_(url)) throw err_('config', 'ยังไม่ได้ตั้งที่อยู่ระบบ Login (CFG.LOGIN_URL แล้ว Run setup)');
+  let j = null;
+  try {
+    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'text/plain;charset=utf-8', payload: JSON.stringify({ v: 1, op: 'web.check', pass: pass, web: CFG.WEB_CODE }), muteHttpExceptions: true, followRedirects: true });
+    j = JSON.parse(res.getContentText());
+  } catch (x) { j = null; }
+  if (!j || (!j.ok && !j.error)) throw err_('busy', 'ตรวจสิทธิ์กับระบบ Login ไม่ได้ ลองอีกครั้ง');
+  if (!j.ok) {
+    cache.remove('who:' + key);
+    const c = String(j.error.code || '');
+    // the login is over: the page asks the login system itself and is sent to the login page with the reason
+    if (c === 'auth' || c === 'expired' || c === 'taken') throw err_('auth', String(j.error.message || 'ให้เข้าสู่ระบบใหม่'));
+    if (c === 'no_web' || c === 'web_closed') throw err_(c, String(j.error.message || 'บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้ ให้ติดต่อ Admin'));
+    throw err_('busy', String(j.error.message || 'ระบบ Login ขัดข้อง ลองอีกครั้ง'));
+  }
+  const u = j.user || {}, role = String(j.role || '');
+  // the recorder: column "ชื่อ-สกุล" of the account's row in LOGIN DATABASE, found by the login system (Username as fallback)
+  const who = { name: String(u.name || u.username || '').trim().slice(0, 60), role: role, edit: role === 'Admin' || role === 'Editor', admin: role === 'Admin', super: j.super === true };
+  // the name in the column ผู้รับผิดชอบ: rank + first name (user, 12 Nov 2026), e.g. ร.อ.สมชาย
+  who.owner = ownerOf_(u.rank, u.name);
+  const left = Math.floor((Number(j.expiresAt) - Date.now()) / 1000);
+  if (left > 1) cache.put('who:' + key, JSON.stringify(who), Math.min(CFG.CHECK_SEC, left));
+  return who;
+}
+/* ผู้รับผิดชอบภารกิจ: ยศ (column ยศ) ติดกับชื่อ (คำก่อนช่องว่างแรกของ column ชื่อ-สกุล) เช่น "ร.อ.สมชาย" (ผู้ใช้สั่ง 12 พ.ย. 2026)
+   การเทียบไม่สนช่องว่าง (ownerKey_) */
+function ownerOf_(rank, name) {
+  const first = String(name || '').trim().split(/\s+/)[0] || '';
+  return (String(rank || '').replace(/\s+/g, '') + first).trim();
+}
+function ownerKey_(v) { return String(v || '').replace(/\s+/g, ''); }
+function isMine_(owner, s) { const k = ownerKey_(owner); return !!k && k === ownerKey_(s.owner); }
 function sha256_(t) {
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, t, Utilities.Charset.UTF_8)
     .map(function (b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
@@ -597,6 +667,19 @@ function renderDisplay_(fy) {
 
 /** รันครั้งเดียวหลังวางโค้ด: สร้างแท็บ ตั้งรหัสเริ่มต้น ตั้งตัวตั้งเวลา และวาดไฟล์แสดงผล */
 function setup() {
+  // ระบบ Login กลาง: จำที่อยู่ไว้ แล้วตรวจว่าระบบ Login ตอบ (ขอสิทธิ์เรียกเว็บภายนอกตอนนี้ด้วย)
+  const p = PropertiesService.getScriptProperties();
+  const url = String(CFG.LOGIN_URL || '').trim();
+  if (url) {
+    if (!loginUrlOk_(url)) throw new Error('CFG.LOGIN_URL ต้องเป็นที่อยู่ Web app ของระบบ Login (ขึ้นต้น https://script.google.com/macros/s/ ลงท้าย /exec)');
+    p.setProperty('LOGIN_URL', url);
+  }
+  if (!loginUrl_()) throw new Error('ยังไม่ได้กรอก CFG.LOGIN_URL (ที่อยู่ระบบหลังบ้านของระบบ Login) กรอกแล้ว Run setup อีกครั้ง');
+  let ok = false;
+  try { ok = JSON.parse(UrlFetchApp.fetch(loginUrl_(), { muteHttpExceptions: true, followRedirects: true }).getContentText()).service === 'eadmin602'; } catch (x) { ok = false; }
+  if (!ok) throw new Error('ติดต่อระบบ Login ที่ ' + loginUrl_() + ' ไม่ได้ ตรวจ CFG.LOGIN_URL แล้ว Run setup อีกครั้ง');
+  Logger.log('ระบบ Login ตอบแล้ว · รหัสเว็บนี้ ' + CFG.WEB_CODE + ' (ต้องตรงกับรายชื่อเว็บในหน้า Admin)');
+  p.deleteProperty('CODE_HASH');                       // the old access code is no longer used
   const fy = String(CFG.FIRST_FY);
   sheet_(fy, 'missions', M_COLS); sheet_(fy, 'logs', LOG_HEAD); snapSheet_(fy);
   // Seed.gs แบบหลายปีงบ: { years: { 69: [...], 70: [...] } }
@@ -613,8 +696,7 @@ function setup() {
       markDirty_(y);
     });
   }
-  const p = PropertiesService.getScriptProperties();
-  if (!p.getProperty('CODE_HASH') || !p.getProperty('ADMIN_HASH')) throw new Error('ตั้งรหัสก่อน: ใส่รหัสใน setCodes() แล้วรัน setCodes หนึ่งครั้ง จากนั้นค่อยรัน setup');
+  if (!p.getProperty('ADMIN_HASH')) Logger.log('⚠ ยังไม่ได้ตั้งรหัส admin (ใช้ตอนวางลิงก์ปีงบใหม่): ใส่รหัสใน setCodes() แล้วรัน setCodes หนึ่งครั้ง');
   if (!p.getProperty('VER')) p.setProperty('VER', '1');
   // ติดตั้งครั้งแรก: นำข้อมูลจาก Seed.gs (ถ้าเพิ่มไฟล์นั้นไว้) ลงไฟล์ต้นทางที่ยังว่าง
   if (typeof SEED !== 'undefined' && SEED.missions && !readMissions_(fy).length) {

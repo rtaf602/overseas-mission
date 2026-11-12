@@ -5,20 +5,46 @@
   'use strict';
   const CONF = window.OM_CONFIG || {};
   const POLL_MS = 5000;
-  let TOKEN = '', EXP = 0;
-  try { const t = JSON.parse(localStorage.getItem('om_tok') || 'null'); if (t && t.exp > Date.now()) { TOKEN = t.token; EXP = t.exp; } } catch (_) {}
 
-  function clearToken() { TOKEN = ''; EXP = 0; try { localStorage.removeItem('om_tok'); } catch (_) {} }
+  // The login of this browser (ระบบ Login กลาง ฝูง.602, repo eadmin, window.App). The page gets from the login system a
+  // pass for this web (CONF.webCode) and sends it with every request; the Apps Script of this web asks the login system
+  // whether it may go on, and as what (Admin / Editor edit, Viewer looks only). The session itself never goes there.
+  const AUTH = window.App || null;
+  function SESS() { const s = AUTH && AUTH.session(); return s ? s.token : ''; }
+  let PASS = '', PASS_OF = '';
+  function PASSV() { return PASS_OF && PASS_OF === SESS() ? PASS : ''; }
+  async function getPass() {
+    const s = SESS(); if (!s) return '';
+    if (PASS_OF === s && PASS) return PASS;
+    const r = await AUTH.enterWeb(CONF.webCode || '');
+    PASS = r.pass || ''; PASS_OF = s; return PASS;
+  }
+  // who this is, from the Apps Script (which asked the login system): name = column ชื่อ-สกุล, role in this web, main admin or not
+  let ME = null;
+  function setMe(m) {
+    if (!m) return;
+    const next = { name: String(m.name || ''), role: String(m.role || ''), super: m.super === true, owner: String(m.owner || '') };
+    next.edit = next.role === 'Admin' || next.role === 'Editor';
+    if (JSON.stringify(next) === JSON.stringify(ME)) return;
+    ME = next; window.dispatchEvent(new Event('app-me'));
+  }
+  const say = (name, detail) => setTimeout(() => window.dispatchEvent(new CustomEvent(name, { detail })), 0);
 
   async function api(action, payload) {
     if (!CONF.apiUrl) throw { code: 'no_api', message: 'ยังไม่ได้ตั้งค่า apiUrl ในไฟล์ config.js' };
     let res, j;
     try {
-      res = await fetch(CONF.apiUrl, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ action, token: TOKEN }, payload || {})) });
+      res = await fetch(CONF.apiUrl, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ action, pass: PASSV() }, payload || {})) });
     } catch (e) { throw { code: 'network', message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต' }; }
     try { j = await res.json(); } catch (e) { throw { code: 'network', message: 'เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง' }; }
     if (j && j.error) {
-      if (j.error.code === 'auth') { clearToken(); window.dispatchEvent(new Event('app-auth-lost')); }
+      const c = j.error.code;
+      // the login is over (its hour, the password changed, another device): the page asks the login system itself
+      if (c === 'auth') say('app-auth-lost');
+      // this account has no access to this web, or the web is closed, or config.js and the Apps Script disagree
+      else if (c === 'no_web' || c === 'web_closed' || c === 'wrong_web') say('app-denied', j.error.message);
+      // the Role in this web became Viewer
+      else if (c === 'forbidden' && ME && ME.edit) { setMe(Object.assign({}, ME, { role: 'Viewer' })); say('app-toast', j.error.message); }
       throw j.error;
     }
     return j;
@@ -47,10 +73,11 @@
 
   let syncing = false, pending = 0, timer = null;
   async function sync() {
-    if (!TOKEN || syncing || pending) return;
+    if (!PASSV() || syncing || pending) return;
     syncing = true;
     try {
       const r = await api('sync', { ver: D.ver });
+      setMe(r.me);
       if (r.files) setFiles(r.files);
       if (r.missions && !pending) { D.settings = r.holidays ? [{ id: 'holidays', map: r.holidays }] : []; emit('settings'); setMissions(r.missions, r.ver); loadLogs(); }
       if (r.snapAt !== D.snapAt) { D.snapAt = r.snapAt; loadSnaps(); }
@@ -59,7 +86,7 @@
   }
   function kick() { clearTimeout(timer); sync().finally(() => { timer = setTimeout(loop, POLL_MS); }); }
   function loop() { if (document.hidden) { timer = setTimeout(loop, POLL_MS); return; } kick(); }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && TOKEN) kick(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && PASSV()) kick(); });
 
   // ---------- writes: one burst of actions goes to the server as one batch ----------
   let Q = [], Qp = null, renderT = null;
@@ -135,7 +162,7 @@
   }
 
   const db = { collection: coll, doc: docRef };
-  const user = { id: async () => '', can: async () => true, me: async () => null, profiles: async () => ({}) };
+  const user = { id: async () => '', can: async () => !!(ME && ME.edit), me: async () => null, profiles: async () => ({}) };
   const downloads = {
     async save({ filename, data }) {
       const url = URL.createObjectURL(data);
@@ -146,15 +173,22 @@
   window.claude = { use: async (n) => ({ db, user, downloads })[n] || null };
 
   window.APP_AUTH = {
-    async login(name, code) {
-      const r = await api('login', { name, code });
-      TOKEN = r.token; EXP = r.exp;
-      try { localStorage.setItem('om_tok', JSON.stringify({ token: TOKEN, exp: EXP })); } catch (_) {}
-      D.ver = 0; D.snapAt = -1; kick();
-      return r;
+    // the pass for this web, then who this is (sync answers with me); the first data comes with it
+    async start() {
+      PASS_OF = '';
+      await getPass();
+      D.ver = 0; D.snapAt = -1; clearTimeout(timer);
+      await sync();
+      clearTimeout(timer); timer = setTimeout(loop, POLL_MS);
+      return ME;
     },
-    logout() { clearToken(); },
-    valid() { return !!TOKEN && EXP > Date.now(); },
+    // after the login was found over: a fresh pass (the login system sends the browser to the login page if it is really over)
+    async renew() { PASS_OF = ''; await getPass(); kick(); },
+    me: () => ME,
+    // a write was refused: take the copy of the server again
+    reload() { D.ver = 0; kick(); },
+    // EXPORT TO PDF / EXCEL: into the history of the fiscal year shown, with the name of the account (Admin / Editor)
+    exported(kind, filename) { return api('exported', { kind, filename, fy: curFy }).catch(() => {}); },
   };
 
   // fiscal-year files: which years have links, which year the table shows, pasting next year's links
@@ -168,5 +202,5 @@
       return r;
     },
   };
-  if (TOKEN) kick(); else timer = setTimeout(loop, POLL_MS);
+  timer = setTimeout(loop, POLL_MS);
 })();
