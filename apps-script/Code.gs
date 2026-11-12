@@ -90,9 +90,10 @@ const API = {
   // ส่งข้อมูลกลับเฉพาะเมื่อมีการเปลี่ยนแปลงหลังเวอร์ชันที่หน้าเว็บถืออยู่
   // ไฟล์ทุกปีงบ + ภารกิจของทุกปีงบ (ไทม์ไลน์แสดงคร่อมปีงบได้)
   sync: function (r, s) {
+    if (r.hello) claimOwner_(s);
     const v = ver_(), files = files_();
     // me: the name (column ชื่อ-สกุล), the Role in this web and whether this is the main admin, from the login system
-    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files, me: { name: s.name, role: s.role, super: s.super } };
+    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files, me: { name: s.name, role: s.role, super: s.super, owner: s.owner, ownerOld: s.ownerOld } };
     if (Number(r.ver) !== v) {
       out.missions = {};
       Object.keys(files).forEach(function (fy) { try { out.missions[fy] = readMissions_(fy); } catch (x) { out.missions[fy] = []; } });
@@ -110,6 +111,14 @@ const API = {
         const id = String(o.id || '');
         if (!/^[A-Za-z0-9_\-]{1,60}$/.test(id)) throw err_('bad_id', 'รหัสภารกิจไม่ถูกต้อง');
         const had = fysOf_(st, id), cur = had.length ? st.maps[had[0]][id] : null;
+        // an Editor: only the missions this account is responsible for (ผู้รับผิดชอบ), adds new ones as its own, deletes none
+        if (!s.admin) {
+          if (o.op === 'delete') throw err_('not_owner', 'Editor ลบภารกิจไม่ได้ ให้ติดต่อ Admin ของเว็บนี้');
+          if (cur && !isMine_(cur.owner, s)) throw err_('not_owner', 'แก้ไขได้เฉพาะภารกิจที่ท่านเป็นผู้รับผิดชอบ (' + (cur.owner || 'ยังไม่ระบุผู้รับผิดชอบ') + ')');
+          const want = o.data && Object.prototype.hasOwnProperty.call(o.data, 'owner') ? o.data.owner : null;
+          if (want !== null && !isMine_(want, s)) throw err_('not_owner', 'เปลี่ยนผู้รับผิดชอบเป็นคนอื่นไม่ได้ ให้ติดต่อ Admin ของเว็บนี้');
+          if (!cur || want !== null || o.op !== 'update') o.data = Object.assign({}, o.data || {}, { owner: s.owner });
+        }
         if (o.op === 'delete') { had.forEach(function (fy) { delete st.maps[fy][id]; st.dirty[fy] = 1; }); return; }
         let row;
         if (o.op === 'update') { if (!cur) return; row = merge_(cur, o.data || {}); }
@@ -322,10 +331,45 @@ function auth_(pass, fresh) {
   }
   const u = j.user || {}, role = String(j.role || '');
   // the recorder: column "ชื่อ-สกุล" of the account's row in LOGIN DATABASE, found by the login system (Username as fallback)
-  const who = { name: String(u.name || u.username || '').trim().slice(0, 60), role: role, edit: role === 'Admin' || role === 'Editor', super: j.super === true };
+  const who = { name: String(u.name || u.username || '').trim().slice(0, 60), role: role, edit: role === 'Admin' || role === 'Editor', admin: role === 'Admin', super: j.super === true };
+  // the name in the column ผู้รับผิดชอบ: rank + first name + first letter of the surname (user, 12 Nov 2026), e.g. ร.อ.สมชาย ใ.
+  who.owner = ownerOf_(u.rank, u.name); who.ownerOld = ownerOf_(u.rank, String(u.name || '').trim().split(/\s+/)[0]);
   const left = Math.floor((Number(j.expiresAt) - Date.now()) / 1000);
   if (left > 1) cache.put('who:' + key, JSON.stringify(who), Math.min(CFG.CHECK_SEC, left));
   return who;
+}
+/* ผู้รับผิดชอบภารกิจ: ยศ (column ยศ) ติดกับชื่อ แล้วเว้นวรรค อักษรตัวแรกของสกุลและจุด เช่น "ร.อ.สมชาย ใ."
+   ชื่อกับสกุลแยกที่ช่องว่างแรกของ column ชื่อ-สกุล. A surname that starts with a leading vowel (เ แ โ ใ ไ) gives its first
+   consonant, as Thai initials are written. The old way (rank + first name only, e.g. "ร.อ.สมชาย") counts as the same person. */
+function ownerOf_(rank, name) {
+  const parts = String(name || '').trim().split(/\s+/), first = parts[0] || '', sur = parts.slice(1).join('');
+  const ini = (sur.replace(/^[เแโใไ]+/, '') || sur).charAt(0);
+  return (String(rank || '').replace(/\s+/g, '') + first + (ini ? ' ' + ini + '.' : '')).trim();
+}
+function ownerKey_(v) { return String(v || '').replace(/\s+/g, '').replace(/\.$/, ''); }
+function isMine_(owner, s) { const k = ownerKey_(owner); return !!k && (k === ownerKey_(s.owner) || k === ownerKey_(s.ownerOld)); }
+// the missions of this account written the old way (rank + first name): the surname initial is filled in, once, when it opens the page
+function claimOwner_(s) {
+  if (!s.owner || ownerKey_(s.owner) === ownerKey_(s.ownerOld)) return;
+  const old = ownerKey_(s.ownerOld);
+  const st = allMaps_(); let n = 0;
+  Object.keys(st.maps).forEach(function (fy) {
+    objValues_(st.maps[fy]).forEach(function (m) { if (ownerKey_(m.owner) === old) { m.owner = s.owner; st.dirty[fy] = 1; n++; } });
+  });
+  if (!n) return;
+  withLock_(function () {
+    const fresh = allMaps_(), logs = {};
+    Object.keys(fresh.maps).forEach(function (fy) {
+      objValues_(fresh.maps[fy]).forEach(function (m) {
+        if (ownerKey_(m.owner) !== old) return;
+        (logs[fy] = logs[fy] || []).push(logRow_({ action: 'edit', mid: m.id, no: m.no || '', mission: m.mission || '', field: 'owner', from: m.owner, to: s.owner }, 'ระบบ (เติมสกุลย่อ)'));
+        m.owner = s.owner; fresh.dirty[fy] = 1;
+      });
+    });
+    saveMaps_(fresh);
+    Object.keys(logs).forEach(function (fy) { appendLogs_(fy, logs[fy]); });
+    if (Object.keys(fresh.dirty).length) bump_();
+  });
 }
 function sha256_(t) {
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, t, Utilities.Charset.UTF_8)

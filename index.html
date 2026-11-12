@@ -12,6 +12,8 @@
 @font-face{font-family:"TH SarabunPSK";src:url(fonts/THSarabun-Bold.ttf) format("truetype");font-weight:700;font-style:normal;font-display:block}
 @font-face{font-family:"TH SarabunPSK";src:url(fonts/THSarabun-Italic.ttf) format("truetype");font-weight:400;font-style:italic;font-display:block}
 @font-face{font-family:"TH SarabunPSK";src:url(fonts/THSarabun-BoldItalic.ttf) format("truetype");font-weight:700;font-style:italic;font-display:block}
+#rows tr.notmine td{background-image:linear-gradient(rgba(120,120,120,.07),rgba(120,120,120,.07))}
+#rows tr.notmine .in,#rows tr.notmine .datebtn{cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -537,7 +539,8 @@ function write(key, fn) {
   const prev = queues.get(key) || Promise.resolve();
   const next = prev.then(fn).then(() => { S.saving--; S.lastSave = new Date(); renderStatus(); }, (e) => {
     S.saving--; S.err = true; renderStatus();
-    if (e && (e.code === 'invalid_argument' || e.code === 'forbidden')) { S.canWrite = false; S.edit = false; renderAll(); toast('บัญชีนี้มีสิทธิ์ดูอย่างเดียว'); }
+    if (e && e.code === 'not_owner') { toast(e.message); if (window.APP_AUTH) window.APP_AUTH.reload(); }
+    else if (e && (e.code === 'invalid_argument' || e.code === 'forbidden')) { S.canWrite = false; S.edit = false; renderAll(); toast('บัญชีนี้มีสิทธิ์ดูอย่างเดียว'); }
     else if (e && e.code === 'quota_exceeded') toast('พื้นที่เก็บข้อมูลเต็ม');
     else toast('บันทึกไม่สำเร็จ ลองอีกครั้ง');
     throw e;
@@ -657,6 +660,7 @@ function renderRibbon() {
 }
 function applyFmt(props) {
   const row = selRow(); if (!row || !db) return;
+  if (!mine(row)) { notMine(); return; }
   const fields = S.scope === 'row' ? FMT_FIELDS : [S.sel.f];
   const patch = {}; row.fmt = row.fmt || {};
   fields.forEach((f) => { patch[f] = { ...props }; row.fmt[f] = { ...(row.fmt[f] || {}), ...props }; });
@@ -804,6 +808,11 @@ const AREA = new Set(['mission', 'route', 'note', 'callsign', 'pax']);
 const acList = () => { const s = new Set(AIRCRAFT); S.rows.forEach((r) => { [r.aircraft, r.stby_aircraft].forEach((v) => { v = String(v || '').trim(); if (v && !v.includes('/')) s.add(v); }); }); return [...s]; };
 const ownerList = () => { const s = new Set(OWNERS); S.rows.forEach((r) => { const v = String(r.owner || '').trim(); if (v && v !== 'STBY') s.add(v); }); return [...s]; };
 const COMBO = { aircraft: acList, stby_aircraft: acList, owner: ownerList };
+// ผู้รับผิดชอบ: an Editor edits, formats and moves only the missions this account is responsible for, adds new ones as
+// its own and deletes none; an Admin of this web does everything. The Apps Script checks the same (not_owner).
+const ownerKey = (v) => String(v || '').replace(/\s+/g, '').replace(/\.$/, '');
+const mine = (r) => !!S.isAdmin || (!!r && !!ownerKey(r.owner) && (ownerKey(r.owner) === ownerKey(S.myOwner) || ownerKey(r.owner) === ownerKey(S.myOwnerOld)));
+const notMine = () => toast('แก้ไขได้เฉพาะภารกิจที่ท่านเป็นผู้รับผิดชอบ');
 const trs = new Map(); let gridMode = null;
 
 function autosize(t) { if (t.tagName !== 'TEXTAREA') return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
@@ -914,6 +923,11 @@ function fillEditRow(tr, r, pos) {
   fillDateBtn(tr.querySelector('.datebtn'), r);
   applyCellStyles(tr, r);
   const b = tr.querySelector('td.del button'); if (b && b._draw) b._draw();
+  const own = mine(r);
+  tr.classList.toggle('notmine', !own); tr.title = own ? '' : 'แก้ไขได้เฉพาะผู้รับผิดชอบ (' + (r.owner || 'ยังไม่ระบุ') + ') หรือ Admin';
+  $$('.in,.datebtn', tr).forEach((el) => { el.disabled = !own || (el.dataset.f === 'owner' && !S.isAdmin); });
+  if (!own) { g._up.disabled = true; g._dn.disabled = true; }
+  if (b) b.hidden = !S.isAdmin;
 }
 function renderSheet() {
   const tbody = $('#rows'); const rows = sorted(S.rows); const shown = rows.filter(visible);
@@ -985,6 +999,17 @@ function moveRow(id, dir) {
   if (!db || !S.canWrite) return;
   const ids = sorted(S.rows).map((r) => r.id); const i = ids.indexOf(id), j = i + dir;
   if (i < 0 || j < 0 || j >= ids.length) return;
+  if (!S.isAdmin) {
+    const row = S.rows.find((r) => r.id === id); if (!mine(row)) { notMine(); return; }
+    const by = (k) => ordOf(S.rows.find((r) => r.id === ids[k]));
+    const a = dir < 0 ? (j - 1 >= 0 ? by(j - 1) : by(j) - 2) : by(j), z = dir < 0 ? by(j) : (j + 1 < ids.length ? by(j + 1) : by(j) + 2);
+    const o = (a + z) / 2; row.order = o;
+    write(id, () => db.doc('missions/' + id).update({ order: o })).catch(() => {});
+    renderSheet();
+    const btn = trs.get(id) && trs.get(id).firstChild[dir < 0 ? '_up' : '_dn']; if (btn && !btn.disabled) btn.focus();
+    log({ action: 'move', mid: id, no: i + 1, mission: row.mission || '', to: String(j + 1) });
+    return;
+  }
   [ids[i], ids[j]] = [ids[j], ids[i]];
   const row = S.rows.find((r) => r.id === id);
   applyOrder(ids); renderSheet();
@@ -996,10 +1021,12 @@ function addRow(afterId) {
   const ids = sorted(S.rows).map((r) => r.id);
   const at = afterId ? ids.indexOf(afterId) + 1 : ids.length;
   const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const doc = { order: at + 0.5, callsign: '', mission: '', route: '', aircraft: 'A320', stby_aircraft: '', pax: '', owner: '', dates: '', ranges: [], dateTbc: false, start: '', end: '', status: 'รอยืนยันภารกิจ', note: '', fmt: {}, updatedAt: new Date().toISOString(), updatedBy: S.me || '' };
+  const ordAt = (k) => ordOf(S.rows.find((r) => r.id === ids[k]));
+  const order = S.isAdmin ? at + 0.5 : (ids.length ? (at === 0 ? ordAt(0) - 1 : at >= ids.length ? ordAt(ids.length - 1) + 1 : (ordAt(at - 1) + ordAt(at)) / 2) : 1);
+  const doc = { order, callsign: '', mission: '', route: '', aircraft: 'A320', stby_aircraft: '', pax: '', owner: S.isAdmin ? '' : (S.myOwner || ''), dates: '', ranges: [], dateTbc: false, start: '', end: '', status: 'รอยืนยันภารกิจ', note: '', fmt: {}, updatedAt: new Date().toISOString(), updatedBy: S.me || '' };
   resetFilters(); S.view = 'sheet'; S.pendingFocus = id;
   const nr = { id, ...doc, _fy: S.fy }; S.rawRows.push(nr); S.rows.push(nr); ids.splice(at, 0, id);
-  write(id, () => db.doc('missions/' + id).set(doc)).then(() => { applyOrder(ids); log({ action: 'add', mid: id, no: at + 1, mission: '' }); toast(afterId ? `แทรกภารกิจที่ ${at + 1} แล้ว` : `เพิ่มภารกิจที่ ${at + 1} แล้ว`); }).catch(() => { S.rawRows = S.rawRows.filter((r) => r.id !== id); renderAll(); });
+  write(id, () => db.doc('missions/' + id).set(doc)).then(() => { if (S.isAdmin) applyOrder(ids); log({ action: 'add', mid: id, no: at + 1, mission: '' }); toast(afterId ? `แทรกภารกิจที่ ${at + 1} แล้ว` : `เพิ่มภารกิจที่ ${at + 1} แล้ว`); }).catch(() => { S.rawRows = S.rawRows.filter((r) => r.id !== id); renderAll(); });
   renderAll();
 }
 $('#addRow').addEventListener('click', () => addRow(null));
@@ -1337,7 +1364,7 @@ function renderCards(shown) {
       `<div class="mu">${esc(r.route || '-')}</div>` +
       `<div>${dl || '<span class="mu">ยังไม่ได้เลือกวัน</span>'}</div>` +
       `<div class="mu">ผู้รับผิดชอบ: ${esc(r.owner || '-')}${r.note ? ' · ' + esc(r.note) : ''}</div>` +
-      (S.edit ? `<div class="acts"><button type="button" data-act="edit">${IC.pen}แก้ไข</button><button type="button" data-act="up" aria-label="เลื่อนขึ้น"${pos <= 1 ? ' disabled' : ''}>▲</button><button type="button" data-act="dn" aria-label="เลื่อนลง"${pos >= S.rows.length ? ' disabled' : ''}>▼</button><button type="button" data-act="ins">＋ แทรกใต้</button><button type="button" data-act="del" class="${S.armDel === r.id ? 'arm' : ''}">${S.armDel === r.id ? 'แตะอีกครั้งเพื่อลบ' : 'ลบ'}</button></div>` : '') +
+      (S.edit ? `<div class="acts">${mine(r) ? `<button type="button" data-act="edit">${IC.pen}แก้ไข</button><button type="button" data-act="up" aria-label="เลื่อนขึ้น"${pos <= 1 ? ' disabled' : ''}>▲</button><button type="button" data-act="dn" aria-label="เลื่อนลง"${pos >= S.rows.length ? ' disabled' : ''}>▼</button>` : '<span class="mu">แก้ไขได้เฉพาะผู้รับผิดชอบ</span>'}<button type="button" data-act="ins">＋ แทรกใต้</button>${S.isAdmin ? `<button type="button" data-act="del" class="${S.armDel === r.id ? 'arm' : ''}">${S.armDel === r.id ? 'แตะอีกครั้งเพื่อลบ' : 'ลบ'}</button>` : ''}</div>` : '') +
       '</div>';
   });
   if (S.edit) h += `<button type="button" id="cardAdd">${IC.plus}เพิ่มภารกิจท้ายตาราง</button>`;
@@ -1348,7 +1375,7 @@ $('#cards').addEventListener('click', (e) => {
   if (e.target.closest('#cardAdd')) { addRow(null); return; }
   const card = e.target.closest('.mcard'); if (!card) return;
   const r = S.rows.find((x) => x.id === card.dataset.id); if (!r) return;
-  const b = e.target.closest('[data-act]'); const act = b ? b.dataset.act : (S.edit ? 'edit' : 'view');
+  const b = e.target.closest('[data-act]'); const act = b ? b.dataset.act : (S.edit && mine(r) ? 'edit' : 'view');
   if (act === 'view') openCard(card, r);
   else if (act === 'edit') openForm(r);
   else if (act === 'up') moveRow(r.id, -1);
@@ -1365,6 +1392,7 @@ function closeForm() { const s = $('#bsScrim'); if (s) s.remove(); }
 function openForm(r0) {
   closeForm(); closePop();
   const r = S.rows.find((x) => x.id === r0.id) || r0;
+  if (!mine(r)) { notMine(); return; }
   const sc = document.createElement('div'); sc.className = 'bs-scrim'; sc.id = 'bsScrim';
   const fld = (f, label, kind) => {
     const v = esc(r[f] ?? '');
@@ -1386,6 +1414,7 @@ function openForm(r0) {
   const db_ = $('#ff-dates'); db_.textContent = dateTxt(r);
   db_.addEventListener('click', () => openDatePicker(db_, S.rows.find((x) => x.id === r.id) || r, (live) => { db_.textContent = dateTxt(live); }));
   ['aircraft', 'stby_aircraft', 'owner'].forEach((f) => attachCombo($('#ff-' + f), COMBO[f]));
+  if (!S.isAdmin) $('#ff-owner').readOnly = true;                 // an Editor cannot hand a mission to somebody else
   sc.addEventListener('mousedown', (e) => { if (e.target === sc) closeForm(); });
   sc.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('.pop')) closeForm(); });
   $('#ffCancel').addEventListener('click', closeForm);
@@ -1762,7 +1791,7 @@ function renderPanel() {
     if (!S.versions.length) h += '<div class="empty">ยังไม่มีฉบับที่บันทึก</div>';
     S.versions.forEach((v) => {
       const armed = S.armRestore === v.id;
-      h += `<div class="snap"><span class="nm">${esc(v.label || 'ฉบับ ' + fmtTH(v.at))}</span><span class="meta">${esc(fmtTH(v.at))} · ${esc(v.byName || nameOf(v.by))} · ${(v.rows || []).length} ภารกิจ</span><span class="acts">${S.canWrite ? `<button type="button" data-pv="${esc(v.id)}">${IC.eye}PREVIEW</button>` : ''}${S.canWrite ? `<button type="button" class="danger${armed ? ' arm' : ''}" data-rs="${esc(v.id)}">${armed ? 'แตะอีกครั้งเพื่อย้อน' : 'ย้อนเป็นฉบับนี้'}</button>` : ''}</span></div>`;
+      h += `<div class="snap"><span class="nm">${esc(v.label || 'ฉบับ ' + fmtTH(v.at))}</span><span class="meta">${esc(fmtTH(v.at))} · ${esc(v.byName || nameOf(v.by))} · ${(v.rows || []).length} ภารกิจ</span><span class="acts">${S.canWrite ? `<button type="button" data-pv="${esc(v.id)}">${IC.eye}PREVIEW</button>` : ''}${S.isAdmin ? `<button type="button" class="danger${armed ? ' arm' : ''}" data-rs="${esc(v.id)}">${armed ? 'แตะอีกครั้งเพื่อย้อน' : 'ย้อนเป็นฉบับนี้'}</button>` : ''}</span></div>`;
     });
     h += '</div>';
     p.innerHTML = h;
@@ -1890,7 +1919,8 @@ $('#lockGo').addEventListener('click', () => { if (AUTH) location.href = AUTH.lo
 function applyMe() {
   const me = window.APP_AUTH && window.APP_AUTH.me(); if (!me) return;
   if (S.canWrite && !me.edit) { S.edit = false; S.sel = null; S.armDel = null; closePv(); }
-  S.canWrite = me.edit; S.isSuper = me.super; S.role = me.role; S.loginName = me.name; setWho(); renderAll();
+  S.canWrite = me.edit; S.isSuper = me.super; S.isAdmin = me.role === 'Admin'; S.role = me.role; S.loginName = me.name;
+  S.myOwner = me.owner; S.myOwnerOld = me.ownerOld; gridMode = null; setWho(); renderAll();
 }
 window.addEventListener('app-me', applyMe);
 window.addEventListener('app-toast', (e) => { if (e.detail) toast(e.detail); });

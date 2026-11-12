@@ -23,7 +23,7 @@
   let ME = null;
   function setMe(m) {
     if (!m) return;
-    const next = { name: String(m.name || ''), role: String(m.role || ''), super: m.super === true };
+    const next = { name: String(m.name || ''), role: String(m.role || ''), super: m.super === true, owner: String(m.owner || ''), ownerOld: String(m.ownerOld || '') };
     next.edit = next.role === 'Admin' || next.role === 'Editor';
     if (JSON.stringify(next) === JSON.stringify(ME)) return;
     ME = next; window.dispatchEvent(new Event('app-me'));
@@ -44,7 +44,7 @@
       // this account has no access to this web, or the web is closed, or config.js and the Apps Script disagree
       else if (c === 'no_web' || c === 'web_closed' || c === 'wrong_web') say('app-denied', j.error.message);
       // the Role in this web became Viewer
-      else if (c === 'forbidden' && ME && ME.edit) { setMe({ name: ME.name, role: 'Viewer', super: ME.super }); say('app-toast', j.error.message); }
+      else if (c === 'forbidden' && ME && ME.edit) { setMe(Object.assign({}, ME, { role: 'Viewer' })); say('app-toast', j.error.message); }
       throw j.error;
     }
     return j;
@@ -72,11 +72,11 @@
   async function loadLogs() { if (!subs.logs.length) return; if (curFy == null) return; try { const r = await api('listLogs', { fy: curFy, limit: 200 }); D.logs = (r.list || []).map((l) => ({ ...l, by: '' })); emit('logs'); } catch (_) {} }
 
   let syncing = false, pending = 0, timer = null;
-  async function sync() {
+  async function sync(hello) {
     if (!PASSV() || syncing || pending) return;
     syncing = true;
     try {
-      const r = await api('sync', { ver: D.ver });
+      const r = await api('sync', { ver: D.ver, hello: hello === true });
       setMe(r.me);
       if (r.files) setFiles(r.files);
       if (r.missions && !pending) { D.settings = r.holidays ? [{ id: 'holidays', map: r.holidays }] : []; emit('settings'); setMissions(r.missions, r.ver); loadLogs(); }
@@ -178,13 +178,15 @@
       PASS_OF = '';
       await getPass();
       D.ver = 0; D.snapAt = -1; clearTimeout(timer);
-      await sync();
+      await sync(true);                                     // hello: the old-style ผู้รับผิดชอบ of this account gets its surname initial
       clearTimeout(timer); timer = setTimeout(loop, POLL_MS);
       return ME;
     },
     // after the login was found over: a fresh pass (the login system sends the browser to the login page if it is really over)
     async renew() { PASS_OF = ''; await getPass(); kick(); },
     me: () => ME,
+    // a write was refused: take the copy of the server again
+    reload() { D.ver = 0; kick(); },
     // EXPORT TO PDF / EXCEL: into the history of the fiscal year shown, with the name of the account (Admin / Editor)
     exported(kind, filename) { return api('exported', { kind, filename, fy: curFy }).catch(() => {}); },
   };
