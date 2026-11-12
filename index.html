@@ -447,8 +447,9 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 <!-- the login system of ฝูง.602 (repo eadmin, same GitHub Pages site): one login for every web -->
 <script src="/eadmin/assets/config.js"></script>
 <script src="/eadmin/assets/app.js"></script>
-<script src="config.js"></script>
-<script src="api.js"></script>
+<!-- ?v= changes whenever api.js changes: a browser that kept the old api.js (GitHub Pages lets it keep files 10 minutes) takes the new one with the new page -->
+<script src="config.js?v=20261112"></script>
+<script src="api.js?v=20261112"></script>
 <script>
 (() => {
 'use strict';
@@ -1954,7 +1955,12 @@ async function startApp() {
   if (!window.APP_AUTH.me()) { showLock(true, 'โหลดข้อมูลไม่สำเร็จ จะลองใหม่อีกครั้ง', false); setTimeout(startApp, 10000); return; }
   showLock(false); applyMe();
 }
-if (!AUTH || !AUTH.hasBackend || !window.APP_AUTH) showLock(true, 'ไม่พบระบบ Login กลาง (eadmin) หน้านี้จึงยังใช้งานไม่ได้', false);
+if (window.APP_AUTH && !window.APP_AUTH.start) {          // an old api.js kept by the browser: reload once, then say so
+  let again = false; try { again = sessionStorage.getItem('om_reload') === '1'; sessionStorage.setItem('om_reload', '1'); } catch (_) { again = true; }
+  showLock(true, again ? 'เบราว์เซอร์ยังใช้ไฟล์รุ่นเก่าของหน้านี้ ให้ปิดแท็บแล้วเปิดใหม่ หรือรอประมาณ 10 นาที' : 'กำลังโหลดหน้าเว็บรุ่นใหม่…', false);
+  if (!again) setTimeout(() => location.reload(), 800);
+}
+else if (!AUTH || !AUTH.hasBackend || !window.APP_AUTH) showLock(true, 'ไม่พบระบบ Login กลาง (eadmin) หน้านี้จึงยังใช้งานไม่ได้', false);
 else if (!AUTH.session()) AUTH.toLogin();
 else {
   // the login of this browser changed in another tab: signed out, or another account signed in
