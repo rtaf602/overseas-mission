@@ -448,8 +448,8 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 <script src="/eadmin/assets/config.js"></script>
 <script src="/eadmin/assets/app.js"></script>
 <!-- ?v= changes whenever api.js changes: a browser that kept the old api.js (GitHub Pages lets it keep files 10 minutes) takes the new one with the new page -->
-<script src="config.js?v=20261112"></script>
-<script src="api.js?v=20261112"></script>
+<script src="config.js?v=20261112b"></script>
+<script src="api.js?v=20261112b"></script>
 <script>
 (() => {
 'use strict';
@@ -1936,6 +1936,8 @@ window.addEventListener('app-denied', (e) => denied(e.detail));
 // directly, and sends this browser to the login page with the reason; it comes back here after the next login
 function onAuthLost() {
   if (!AUTH || !AUTH.session()) { if (AUTH) AUTH.toLogin(); return; }
+  if (Date.now() - (S.lastRenew || 0) < 30000) return;       // at most once in 30 seconds (an Apps Script that keeps refusing)
+  S.lastRenew = Date.now();
   if (S.edit) { S.edit = false; renderAll(); }
   AUTH.api('me').then(() => window.APP_AUTH.renew()).catch(() => {});
 }
@@ -1948,8 +1950,10 @@ async function startApp() {
   catch (e) {
     // no access, or the web closed: the message of the login system; the login over: App has gone to the login page
     if (e && (e.code === 'no_web' || e.code === 'web_closed' || e.code === 'wrong_web')) { denied(e.message); return; }
-    if (e && e.code === 'auth') return;
-    showLock(true, (e && e.message) || 'ตรวจสิทธิ์ไม่สำเร็จ', false); setTimeout(startApp, 10000); return;
+    // the pass was handed out, but the Apps Script of this web refuses it: an old Code.gs, or not deployed as a new version
+    if (e && e.code === 'auth' && !e.first) return;
+    const hint = e && e.first ? (e.code === 'auth' ? ' · Apps Script ของเว็บนี้ยังเป็นโค้ดรุ่นเก่า: วาง Code.gs ใหม่ แล้ว Deploy → Manage deployments → New version' : e.code === 'config' || e.code === 'busy' ? ' · ตรวจ CFG.LOGIN_URL ใน Apps Script แล้ว Run setup' : '') : '';
+    showLock(true, ((e && e.message) || 'ตรวจสิทธิ์ไม่สำเร็จ') + hint, false); setTimeout(startApp, 15000); return;
   }
   if (S.denied) return;
   if (!window.APP_AUTH.me()) { showLock(true, 'โหลดข้อมูลไม่สำเร็จ จะลองใหม่อีกครั้ง', false); setTimeout(startApp, 10000); return; }
