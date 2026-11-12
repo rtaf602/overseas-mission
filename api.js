@@ -71,6 +71,7 @@
   async function loadSnaps() { if (curFy == null) return; try { const r = await api('listSnaps', { fy: curFy }); D.versions = (r.list || []).map((v) => ({ ...v, by: '' })); emit('versions'); } catch (_) {} }
   async function loadLogs() { if (!subs.logs.length) return; if (curFy == null) return; try { const r = await api('listLogs', { fy: curFy, limit: 200 }); D.logs = (r.list || []).map((l) => ({ ...l, by: '' })); emit('logs'); } catch (_) {} }
 
+  let lastErr = null;
   let syncing = false, pending = 0, timer = null;
   async function sync() {
     if (!PASSV() || syncing || pending) return;
@@ -81,7 +82,7 @@
       if (r.files) setFiles(r.files);
       if (r.missions && !pending) { D.settings = r.holidays ? [{ id: 'holidays', map: r.holidays }] : []; emit('settings'); setMissions(r.missions, r.ver); loadLogs(); }
       if (r.snapAt !== D.snapAt) { D.snapAt = r.snapAt; loadSnaps(); }
-    } catch (e) { if (e && e.code !== 'auth' && !D.ver) fail('missions', e); }
+    } catch (e) { lastErr = e; if (e && e.code !== 'auth' && !D.ver) fail('missions', e); }
     finally { syncing = false; }
   }
   function kick() { clearTimeout(timer); sync().finally(() => { timer = setTimeout(loop, POLL_MS); }); }
@@ -178,8 +179,10 @@
       PASS_OF = '';
       await getPass();
       D.ver = 0; D.snapAt = -1; clearTimeout(timer);
+      lastErr = null;
       await sync();
       clearTimeout(timer); timer = setTimeout(loop, POLL_MS);
+      if (!ME && lastErr) throw Object.assign({}, lastErr, { first: true });     // the page says why the first load failed
       return ME;
     },
     // after the login was found over: a fresh pass (the login system sends the browser to the login page if it is really over)
