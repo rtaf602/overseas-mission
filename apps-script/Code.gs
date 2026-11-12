@@ -114,9 +114,9 @@ const API = {
         if (!s.admin) {
           if (o.op === 'delete') throw err_('not_owner', 'Editor ลบภารกิจไม่ได้ ให้ติดต่อ Admin ของเว็บนี้');
           if (cur && !isMine_(cur.owner, s)) throw err_('not_owner', 'แก้ไขได้เฉพาะภารกิจที่ท่านเป็นผู้รับผิดชอบ (' + (cur.owner || 'ยังไม่ระบุผู้รับผิดชอบ') + ')');
-          const want = o.data && Object.prototype.hasOwnProperty.call(o.data, 'owner') ? o.data.owner : null;
-          if (want !== null && !isMine_(want, s)) throw err_('not_owner', 'เปลี่ยนผู้รับผิดชอบเป็นคนอื่นไม่ได้ ให้ติดต่อ Admin ของเว็บนี้');
-          if (!cur || want !== null || o.op !== 'update') o.data = Object.assign({}, o.data || {}, { owner: s.owner });
+          // a new mission is its own; its own mission it may hand to somebody else (then it can no longer edit it, user 12 Nov 2026)
+          const has = o.data && Object.prototype.hasOwnProperty.call(o.data, 'owner');
+          if (!cur || (o.op !== 'update' && !has)) o.data = Object.assign({}, o.data || {}, { owner: s.owner });
         }
         if (o.op === 'delete') { had.forEach(function (fy) { delete st.maps[fy][id]; st.dirty[fy] = 1; }); return; }
         let row;
@@ -158,6 +158,7 @@ const API = {
 
   // a PDF or Excel file was made in the page: into the history of that fiscal year with the name of the account
   exported: function (r, s) {
+    if (!s.super) throw err_('not_super', 'PREVIEW และส่งออกไฟล์ได้เฉพาะ Admin หลัก');
     const kind = r.kind === 'pdf' ? 'EXPORT TO PDF' : r.kind === 'xlsx' ? 'EXPORT TO EXCEL' : '';
     if (!kind) throw err_('bad_request', 'ไม่รู้จักชนิดไฟล์');
     const fy = fyArg_(r.fy);
@@ -170,7 +171,8 @@ const API = {
   },
 
   // วันหยุดราชการ (ใช้ร่วมกันทุกปีงบ) เก็บในแท็บ holidays ของไฟล์ต้นทางปีงบแรก
-  setHolidays: function (r) {
+  setHolidays: function (r, s) {
+    if (!s.super) throw err_('not_super', 'แก้วันหยุดราชการได้เฉพาะ Admin หลัก');
     const m = r.map || {}, rows = [['date', 'name']];
     Object.keys(m).sort().forEach(function (k) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) throw err_('bad_date', 'วันที่ไม่ถูกต้อง');

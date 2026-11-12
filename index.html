@@ -594,7 +594,7 @@ function renderRibbonPhone(r) {
   const view = `<div class="rseg" role="group" aria-label="มุมมอง"><button type="button" data-view="sheet" class="${S.view === 'sheet' ? 'on' : ''}">ตาราง</button><button type="button" data-view="tl" class="${S.view === 'tl' ? 'on' : ''}">ไทม์ไลน์</button></div>`;
   let h = '<div class="mbar">';
   if (S.edit) h += `<button type="button" id="addBtn">${IC.plus}เพิ่มภารกิจ</button><span class="sp"></span><button type="button" class="more" id="moreBtn" aria-label="เมนูเพิ่มเติม" aria-haspopup="menu">⋯</button><button type="button" class="primary" id="doneBtn">${IC.check}เสร็จสิ้น</button>`;
-  else h += `${S.canWrite ? `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก</button>` : ''}${view}<span class="sp"></span><button type="button" class="more" id="moreBtn" aria-label="เมนูเพิ่มเติม" aria-haspopup="menu">⋯</button>`;
+  else h += `${S.isSuper ? `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก</button>` : ''}${view}<span class="sp"></span><button type="button" class="more" id="moreBtn" aria-label="เมนูเพิ่มเติม" aria-haspopup="menu">⋯</button>`;
   h += `</div><div class="statusline"><span id="rstatus">${statusHTML()}</span></div>`;
   r.innerHTML = h;
   const ctxMeta = () => (S.view === 'tl' ? { kind: 'tl' } : {});
@@ -605,7 +605,7 @@ function renderRibbonPhone(r) {
   on('doneBtn', async () => { const ok = await saveVersion(''); if (ok) { S.edit = false; renderAll(); } });
   on('moreBtn', (e) => {
     const items = [];
-    if (S.edit) items.push(['pv', 'PREVIEW', ''], ['pdf', 'EXPORT TO PDF', '1 หน้า A4'], ['xlsx', 'EXPORT TO EXCEL', '.xlsx']);
+    if (S.edit && S.isSuper) items.push(['pv', 'PREVIEW', ''], ['pdf', 'EXPORT TO PDF', '1 หน้า A4'], ['xlsx', 'EXPORT TO EXCEL', '.xlsx']);
     if (db) items.push(['snap', 'ฉบับที่บันทึก', ''], ['log', 'ประวัติการแก้ไข', '']);
     if (S.canWrite && !S.edit) items.push(['edit', 'แก้ไขแผน', '']);
     if (S.edit) items.push(['exit', 'ออกจากโหมดแก้ไข', '']);
@@ -623,7 +623,7 @@ function renderRibbon() {
   const view = `<div class="rseg" role="group" aria-label="มุมมอง"><button type="button" data-view="sheet" class="${S.view === 'sheet' ? 'on' : ''}">ตาราง</button><button type="button" data-view="tl" class="${S.view === 'tl' ? 'on' : ''}">ไทม์ไลน์</button></div>`;
   let h = '<div class="rbar"><div class="rscroll">';
   if (S.edit) { h += grp('ภารกิจ', `<button type="button" id="addBtn">${IC.plus}เพิ่มภารกิจ</button>`); h += fmtGroup(); }
-  if (S.canWrite) h += grp('พิมพ์ / ส่งออก', `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก ${IC.caret}</button>`, 'tools');
+  if (S.isSuper) h += grp('พิมพ์ / ส่งออก', `<button type="button" id="pvBtn">${IC.eye}PREVIEW</button><button type="button" id="expBtn" aria-haspopup="menu">${IC.out}ส่งออก ${IC.caret}</button>`, 'tools');
   h += grp('ฉบับและประวัติ', `<button type="button" id="snapBtn"${db ? '' : ' disabled'}>${IC.layers}ฉบับที่บันทึก</button><button type="button" id="logBtn"${db ? '' : ' disabled'}>${IC.clock}ประวัติการแก้ไข</button>`);
   if (!S.edit) h += grp('มุมมอง', view);
   h += '</div>';
@@ -813,6 +813,11 @@ const COMBO = { aircraft: acList, stby_aircraft: acList, owner: ownerList };
 const ownerKey = (v) => String(v || '').replace(/\s+/g, '');
 const mine = (r) => !!S.isAdmin || (!!r && !!ownerKey(r.owner) && ownerKey(r.owner) === ownerKey(S.myOwner));
 const notMine = () => toast('แก้ไขได้เฉพาะภารกิจที่ท่านเป็นผู้รับผิดชอบ');
+// an Editor gave its mission to somebody else (ผู้รับผิดชอบ changed): from now on only that person or an Admin edits it
+function handedOver(r, f) {
+  if (f !== 'owner' || S.isAdmin || mine(r)) return false;
+  toast(`มอบภารกิจให้ ${r.owner || '(ว่าง)'} แล้ว ท่านจะแก้ไขภารกิจนี้ไม่ได้อีก`); renderSheet(); return true;
+}
 const trs = new Map(); let gridMode = null;
 
 function autosize(t) { if (t.tagName !== 'TEXTAREA') return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
@@ -843,7 +848,7 @@ function makeInput(r, f) {
     const v = el.value;
     if ((row[f] ?? '') === v) return;
     const patch = { [f]: v }, old = { [f]: row[f] ?? '' };
-    Object.assign(row, patch); saveField(r.id, patch, old);
+    Object.assign(row, patch); saveField(r.id, patch, old); handedOver(row, f);
     if (f === 'status') applyCellStyles(el.closest('tr'), row);
   });
   el.addEventListener('keydown', (e) => {
@@ -925,7 +930,7 @@ function fillEditRow(tr, r, pos) {
   const b = tr.querySelector('td.del button'); if (b && b._draw) b._draw();
   const own = mine(r);
   tr.classList.toggle('notmine', !own); tr.title = own ? '' : 'แก้ไขได้เฉพาะผู้รับผิดชอบ (' + (r.owner || 'ยังไม่ระบุ') + ') หรือ Admin';
-  $$('.in,.datebtn', tr).forEach((el) => { el.disabled = !own || (el.dataset.f === 'owner' && !S.isAdmin); });
+  $$('.in,.datebtn', tr).forEach((el) => { el.disabled = !own; });
   if (!own) { g._up.disabled = true; g._dn.disabled = true; }
   if (b) b.hidden = !S.isAdmin;
 }
@@ -1312,7 +1317,7 @@ function renderMonthCal(w0, w1) {
       if (d > dim) { h += `<div class="mdh void${lc}" style="grid-row:1;grid-column:${d + 1}"></div>`; continue; }
       const iso = isoDay(new Date(Date.UTC(y, mo, d))), wd = new Date(Date.UTC(y, mo, d)).getUTCDay(), hol = HOLIDAYS[iso];
       const dl = `${TH_WD[wd]} ${d} ${TH_M[mo]}${yy(m)}${hol ? ' · ' + hol : ''}`;
-      h += `<div class="mdh${wd === 0 || wd === 6 ? ' we' : ''}${hol ? ' hol' : ''}${iso === todayIso ? ' today' : ''}${lc}${S.canWrite && db ? ' hedit' : ''}" style="grid-row:1;grid-column:${d + 1}" title="${esc(iso === todayIso ? 'วันนี้ · ' + dl : dl)}" data-iso="${iso}"${hol ? ` data-hol="${esc(dl)}"` : ''}>${d}<small>${TH_WD[wd]}</small></div>`;
+      h += `<div class="mdh${wd === 0 || wd === 6 ? ' we' : ''}${hol ? ' hol' : ''}${iso === todayIso ? ' today' : ''}${lc}${S.isSuper && db ? ' hedit' : ''}" style="grid-row:1;grid-column:${d + 1}" title="${esc(iso === todayIso ? 'วันนี้ · ' + dl : dl)}" data-iso="${iso}"${hol ? ` data-hol="${esc(dl)}"` : ''}>${d}<small>${TH_WD[wd]}</small></div>`;
     }
     for (let ln = 0; ln < L; ln++) for (let d = 1; d <= 31; d++) {
       const cls = [d > dim ? 'void' : 'mc'];
@@ -1343,7 +1348,7 @@ function renderMonthCal(w0, w1) {
   if (out) notes.push(`อีก ${out} ภารกิจอยู่นอกช่วงที่แสดง`);
   if (noDate) notes.push(`${noDate} ภารกิจยังไม่ได้เลือกวัน`);
   if (!S.tl.showRed) { const n = S.allRows.filter((r) => isRed(r.status)).length; if (n) notes.push(`ซ่อนภารกิจที่ยกเลิก / เลื่อน ${n} รายการ`); }
-  notes.push(S.canWrite && db ? 'คลิกภารกิจเพื่อดูรายละเอียด · คลิกหัววันที่เพื่อตั้ง แก้ชื่อ หรือยกเลิกวันหยุด' : 'คลิกภารกิจเพื่อดูรายละเอียด');
+  notes.push(S.isSuper && db ? 'คลิกภารกิจเพื่อดูรายละเอียด · คลิกหัววันที่เพื่อตั้ง แก้ชื่อ หรือยกเลิกวันหยุด' : 'คลิกภารกิจเพื่อดูรายละเอียด');
   $('#tlNote').textContent = notes.join(' · ');
   box.scrollLeft = 0;
 }
@@ -1414,7 +1419,6 @@ function openForm(r0) {
   const db_ = $('#ff-dates'); db_.textContent = dateTxt(r);
   db_.addEventListener('click', () => openDatePicker(db_, S.rows.find((x) => x.id === r.id) || r, (live) => { db_.textContent = dateTxt(live); }));
   ['aircraft', 'stby_aircraft', 'owner'].forEach((f) => attachCombo($('#ff-' + f), COMBO[f]));
-  if (!S.isAdmin) $('#ff-owner').readOnly = true;                 // an Editor cannot hand a mission to somebody else
   sc.addEventListener('mousedown', (e) => { if (e.target === sc) closeForm(); });
   sc.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('.pop')) closeForm(); });
   $('#ffCancel').addEventListener('click', closeForm);
@@ -1424,7 +1428,7 @@ function openForm(r0) {
     ['mission', 'callsign', 'route', 'aircraft', 'stby_aircraft', 'pax', 'owner', 'status', 'note'].forEach((f) => { const v = $('#ff-' + f).value.trim(); if ((live[f] ?? '') !== v) { patch[f] = v; old[f] = live[f] ?? ''; } });
     closeForm();
     if (!Object.keys(patch).length) return;
-    Object.assign(live, patch); saveField(live.id, patch, old); renderAll(); toast('บันทึกแล้ว');
+    Object.assign(live, patch); saveField(live.id, patch, old); renderAll(); if (!handedOver(live, 'owner' in patch ? 'owner' : '')) toast('บันทึกแล้ว');
   });
   $('#ff-mission').focus();
 }
@@ -1504,7 +1508,7 @@ async function setHoliday(iso, name, how, label) {
 $('#cal').addEventListener('click', (e) => {
   if (e.target.closest('.mev,.cbar,.ag-i')) return;
   const hd = e.target.closest('.mdh[data-iso]');
-  if (hd && S.canWrite && db) { openHolidayEditor(hd); return; }
+  if (hd && S.isSuper && db) { openHolidayEditor(hd); return; }
   const h = e.target.closest('[data-hol]'); if (!h) return;
   const p = document.createElement('div'); p.className = 'pop'; p.style.padding = '8px 12px'; p.style.fontSize = '13px'; p.setAttribute('role', 'status');
   p.textContent = h.dataset.hol; showPop(p, h, false);
@@ -1725,8 +1729,8 @@ async function save(filename, blob) {
   try { await downloads.save({ filename, data: blob }); toast('ดาวน์โหลดแล้ว'); return true; }
   catch (e) { if (e && e.code === 'declined') return false; toast(e && e.code === 'rate_limited' ? 'รอสักครู่แล้วลองอีกครั้ง' : 'ดาวน์โหลดไม่สำเร็จ'); return false; }
 }
-// Viewer looks only: no PREVIEW and no PDF / Excel (the buttons are hidden too; the Apps Script refuses to log it)
-function mayExport() { if (S.canWrite) return true; toast('บัญชีนี้มีสิทธิ์ดูอย่างเดียว (Viewer) ส่งออกไฟล์ไม่ได้'); return false; }
+// PREVIEW and PDF / Excel: the main admin only (user, 12 Nov 2026); the buttons are not shown to anybody else
+function mayExport() { if (S.isSuper) return true; toast('PREVIEW และส่งออกไฟล์ได้เฉพาะ Admin หลัก'); return false; }
 // a file given out goes into the history with the name of the account (EXPORT TO PDF / EXPORT TO EXCEL)
 const logExport = (kind, filename) => { if (window.APP_AUTH && window.APP_AUTH.exported) window.APP_AUTH.exported(kind, filename); };
 // e.g. "691104 1230TH-LT ภารกิจต่างประเทศปี70" (Thai year, Thai local time)
@@ -1791,7 +1795,7 @@ function renderPanel() {
     if (!S.versions.length) h += '<div class="empty">ยังไม่มีฉบับที่บันทึก</div>';
     S.versions.forEach((v) => {
       const armed = S.armRestore === v.id;
-      h += `<div class="snap"><span class="nm">${esc(v.label || 'ฉบับ ' + fmtTH(v.at))}</span><span class="meta">${esc(fmtTH(v.at))} · ${esc(v.byName || nameOf(v.by))} · ${(v.rows || []).length} ภารกิจ</span><span class="acts">${S.canWrite ? `<button type="button" data-pv="${esc(v.id)}">${IC.eye}PREVIEW</button>` : ''}${S.isAdmin ? `<button type="button" class="danger${armed ? ' arm' : ''}" data-rs="${esc(v.id)}">${armed ? 'แตะอีกครั้งเพื่อย้อน' : 'ย้อนเป็นฉบับนี้'}</button>` : ''}</span></div>`;
+      h += `<div class="snap"><span class="nm">${esc(v.label || 'ฉบับ ' + fmtTH(v.at))}</span><span class="meta">${esc(fmtTH(v.at))} · ${esc(v.byName || nameOf(v.by))} · ${(v.rows || []).length} ภารกิจ</span><span class="acts">${S.isSuper ? `<button type="button" data-pv="${esc(v.id)}">${IC.eye}PREVIEW</button>` : ''}${S.isAdmin ? `<button type="button" class="danger${armed ? ' arm' : ''}" data-rs="${esc(v.id)}">${armed ? 'แตะอีกครั้งเพื่อย้อน' : 'ย้อนเป็นฉบับนี้'}</button>` : ''}</span></div>`;
     });
     h += '</div>';
     p.innerHTML = h;
