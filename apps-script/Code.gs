@@ -476,7 +476,13 @@ const PCOLS = [['no', 4.7], ['callsign', 14], ['mission', 19.9], ['route', 30.3]
 const PHEAD = ['NO', 'CALLSIGN', 'MISSION', 'เส้นทางบิน', 'AIRCRAFT', 'STBY AIRCRAFT', 'PAX', 'ผู้รับผิดชอบ', 'วันปฏิบัติภารกิจ', 'ผลความก้าวหน้า'];
 const TBC = '(รอยืนยัน)';
 
-function group_(s) { s = String(s || ''); return s.indexOf('ยกเลิก') >= 0 ? 'cancelled' : s.indexOf('เลื่อน') >= 0 ? 'moved' : s.indexOf('เรียบร้อย') >= 0 ? 'done' : 'pending'; }
+function group_(s) { s = String(s || ''); return s.indexOf('ยกเลิก') >= 0 ? 'cancelled' : s.indexOf('เลื่อน') >= 0 ? 'moved' : s.indexOf('เรียบร้อย') >= 0 ? 'done' : s.indexOf('รอปฏิบัติ') >= 0 ? 'ready' : 'pending'; }
+// "รอปฏิบัติภารกิจ (ได้รับหนังสือขอใช้ บ.)" แสดง 2 บรรทัด: ดำ แล้วเขียว
+function statusLines_(s) {
+  s = String(s || ''); const i = s.indexOf(' (');
+  if (s.indexOf('รอปฏิบัติภารกิจ') !== 0 || i < 0) return null;
+  return [{ t: s.slice(0, i), color: '#000000' }, { t: s.slice(i + 1), color: '#00B050' }];
+}
 function yy_(d) { return ('0' + ((d.getUTCFullYear() + 543) % 100)).slice(-2); }
 function pd_(s) { return s ? new Date(s + 'T00:00:00Z') : null; }
 function thaiRange_(a, b) {
@@ -552,7 +558,8 @@ function renderDisplay_(fy) {
       fw.push(m.b === true ? 'bold' : 'normal'); fs.push(m.i ? 'italic' : 'normal'); sz.push(gsz_(m.sz || 14));
       const ln = val.split('\n').reduce(function (n, part) { return n + Math.max(1, Math.ceil(part.length * ((m.sz || 14) / 14) / (pc[1] * 0.95))); }, 0);
       lines = Math.max(lines, ln);
-      if (f === 'dates' && r.dateTbc) rich.push({ r: rowN, c: ci + 1, parts: dateParts_(r), col: col, tbc: '#' + (r.tbcColor || 'FF0000') });
+      if (f === 'dates' && r.dateTbc) rich.push({ r: rowN, c: ci + 1, parts: dateParts_(r).map(function (p) { return p.tbc ? { t: p.t, color: '#' + (r.tbcColor || 'FF0000') } : p; }) });
+      if (f === 'status' && statusLines_(r.status) && !m.c) { v[ci] = statusLines_(r.status).map(function (p) { return p.t; }).join('\n'); rich.push({ r: rowN, c: ci + 1, parts: statusLines_(r.status) }); }
     });
     pushRow(v, bg, fc, fw, fs, sz); heights.push(Math.max(24, Math.round(lines * 19)));
   });
@@ -569,9 +576,9 @@ function renderDisplay_(fy) {
   sh.getRange(n, 1, 1, C).merge().setHorizontalAlignment('left').setWrap(false);
   rich.forEach(function (x) {
     let text = '', pos = 0; const b = [];
-    x.parts.forEach(function (p, k) { const t = (k ? '\n' : '') + p.t; if (p.tbc) b.push([pos + (k ? 1 : 0), pos + t.length]); text += t; pos += t.length; });
+    x.parts.forEach(function (p, k) { const t = (k ? '\n' : '') + p.t; if (p.color) b.push([pos + (k ? 1 : 0), pos + t.length, p.color]); text += t; pos += t.length; });
     const rb = SpreadsheetApp.newRichTextValue().setText(text);
-    b.forEach(function (s) { rb.setTextStyle(s[0], s[1], SpreadsheetApp.newTextStyle().setForegroundColor(x.tbc).build()); });
+    b.forEach(function (s) { rb.setTextStyle(s[0], s[1], SpreadsheetApp.newTextStyle().setForegroundColor(s[2]).build()); });
     sh.getRange(x.r, x.c).setRichTextValue(rb.build());
   });
   if (list.length) sh.getRange(3, 1, list.length + 1, C).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);

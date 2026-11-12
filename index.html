@@ -81,13 +81,13 @@ button:disabled{opacity:.45;cursor:default}
 @media (max-width:700px){.phone-only{display:inline-flex!important}.phone-hide{display:none!important}.sumbar{font-size:12.5px;gap:4px 10px}.sumbar .nextm{display:none}.filters .rseg button{padding:5px 8px;font-size:12.5px}.search{width:100%}.tlbar{gap:6px}.tlbar .legend{display:none}}
 .cards{display:flex;flex-direction:column;gap:8px}
 .mcard{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:10px;padding:10px 12px;display:grid;gap:3px;font-size:13.5px;line-height:1.45;cursor:pointer}
-.mcard.done{border-left-color:var(--ok)}.mcard.cancelled,.mcard.moved{border-left-color:var(--danger)}
+.mcard.done{border-left-color:var(--ok)}.mcard.ready{border-left-color:#2F75B5}.mcard.cancelled,.mcard.moved{border-left-color:var(--danger)}
 .mcard.even{background:var(--soft)}
 .mcard .h{display:flex;gap:8px;align-items:baseline}
 .mcard .no{font-weight:700;color:var(--muted);min-width:1.4em}
 .mcard .ti{font-weight:600;flex:1;min-width:0}
 .mcard .stt{font-size:12px;font-weight:600;white-space:nowrap}
-.s-done{color:var(--ok)}.s-pending{color:var(--warn)}.s-cancelled,.s-moved{color:var(--danger)}
+.s-done{color:var(--ok)}.s-ready{color:var(--fg)}.s-pending{color:var(--warn)}.s-cancelled,.s-moved{color:var(--danger)}
 .mcard .cs{font-weight:600}
 .mcard .mu{color:var(--muted)}
 .mcard .tb{font-weight:600}
@@ -107,7 +107,7 @@ button:disabled{opacity:.45;cursor:default}
 .agenda{display:flex;flex-direction:column;gap:6px;padding:8px}
 .ag-m{font-weight:700;font-size:14.5px;padding:8px 2px 2px}
 .ag-i{display:grid;grid-template-columns:70px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:8px;padding:8px 10px;background:var(--panel);text-align:left;width:100%;font:inherit;color:var(--fg);white-space:normal;line-height:1.4}
-.ag-i.done{border-left-color:var(--ok)}.ag-i.cancelled,.ag-i.moved{border-left-color:var(--danger)}
+.ag-i.done{border-left-color:var(--ok)}.ag-i.ready{border-left-color:#2F75B5}.ag-i.cancelled,.ag-i.moved{border-left-color:var(--danger)}
 .ag-i.past{opacity:.62}
 .ag-i.clash{box-shadow:0 0 0 2px var(--danger)}
 .ag-d{font-weight:700;font-variant-numeric:tabular-nums;font-size:13.5px}
@@ -124,7 +124,7 @@ button:disabled{opacity:.45;cursor:default}
 .stat{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
 .stat b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
-.dot.done{background:var(--ok)}.dot.pending{background:var(--warn)}.dot.cancelled,.dot.red{background:var(--danger)}.dot.moved{background:#E57373}
+.dot.done{background:var(--ok)}.dot.ready{background:#2F75B5}.dot.pending{background:var(--warn)}.dot.cancelled,.dot.red{background:var(--danger)}.dot.moved{background:#E57373}
 .nextm{color:var(--muted)}
 .nextm b{color:var(--fg);font-weight:600}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
@@ -219,7 +219,7 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .cl .acn{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .cbar{position:absolute;top:50%;height:18px;transform:translateY(-50%);border-radius:5px;border:0;padding:0 7px;font:inherit;font-size:11.5px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#fff;white-space:nowrap;overflow:hidden;z-index:1;min-width:6px;justify-content:flex-start}
 .cbar:hover{filter:brightness(1.08);box-shadow:0 0 0 2px var(--fg)}
-.cbar.done{background:var(--ok)}.cbar.pending{background:var(--warn)}.cbar.cancelled{background:var(--line);color:var(--fg)}.cbar.moved{background:#E57373}
+.cbar.done{background:var(--ok)}.cbar.ready{background:#2F75B5}.cbar.pending{background:var(--warn)}.cbar.cancelled{background:var(--line);color:var(--fg)}.cbar.moved{background:#E57373}
 .cbar.alt{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.38) 0 4px,transparent 4px 9px);outline:1.5px dashed var(--fg);outline-offset:-1.5px}
 .cbar.clash{box-shadow:0 0 0 2.5px var(--danger)}
 .calt{position:absolute;top:50%;height:0;border-top:1.5px dashed var(--muted);display:flex;justify-content:center;pointer-events:none;z-index:1}
@@ -247,7 +247,7 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .month .mc.lr{border-bottom:0}
 .month .mev{position:relative;z-index:2;margin:2px 1px;border:1px solid #000;border-radius:3px;font:inherit;font-size:14.5px;line-height:1.02;padding:1px 3px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden;color:#000;min-width:0}
 .month .mev:hover{outline:2.5px solid #1F4E8C;outline-offset:1px;z-index:3}
-.month .mev.done{background:#C6EFCE}.month .mev.pending{background:#FFEB9C}.month .mev.moved{background:#FFC7CE}.month .mev.cancelled{background:#E7E6E6;color:#555;text-decoration:line-through}
+.month .mev.done{background:#C6EFCE}.month .mev.ready{background:#DDEBF7}.month .mev.pending{background:#FFEB9C}.month .mev.moved{background:#FFC7CE}.month .mev.cancelled{background:#E7E6E6;color:#555;text-decoration:line-through}
 .month .mev.alt{border-style:dashed;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 5px,transparent 5px 10px)}
 .month .mev.clash{box-shadow:0 0 0 2.5px #C00000}
 .month .mev .l1{font-weight:700;white-space:normal;overflow-wrap:anywhere;max-width:100%}
@@ -257,7 +257,7 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .month .mev .tb{color:#FF0000;font-weight:700}
 .month .mev.narrow{padding:1px 1px}.month .mev.narrow .l1{font-size:12.5px;line-height:1.05}
 .month .mev .l3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700}
-.month .mev .s-done{color:#006100}.month .mev .s-pending{color:#9C5700}.month .mev .s-cancelled,.month .mev .s-moved{color:#C00000}
+.month .mev .s-done{color:#006100}.month .mev .s-ready{color:#000}.month .mev .s-pending{color:#9C5700}.month .mev .s-cancelled,.month .mev .s-moved{color:#C00000}
 .month .mempty{grid-column:2/-1;display:flex;align-items:center;justify-content:center;color:#666;font-family:var(--f-ui);font-size:12.5px;z-index:1;pointer-events:none;border:0!important}
 .month .mempty span{background:#fff;padding:1px 10px;border-radius:4px}
 .mlegend{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;font-size:14px;padding:2px}
@@ -405,6 +405,7 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
       <div class="rseg" role="group" aria-label="กรองตามสถานะ" id="fseg">
         <button type="button" data-f="all" class="on">ทั้งหมด</button>
         <button type="button" data-f="done"><i class="dot done"></i>เรียบร้อย</button>
+        <button type="button" data-f="ready"><i class="dot ready"></i>รอปฏิบัติ</button>
         <button type="button" data-f="pending"><i class="dot pending"></i>รอยืนยัน</button>
         <button type="button" data-f="red"><i class="dot red"></i>ยกเลิก / เลื่อน</button>
       </div>
@@ -451,10 +452,18 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const STATUSES = ['รอยืนยันภารกิจ', 'ปฏิบัติภารกิจเรียบร้อย', 'ยกเลิกภารกิจ', 'เลื่อนภารกิจ'];
+const READY = 'รอปฏิบัติภารกิจ (ได้รับหนังสือขอใช้ บ.)';
+const STATUSES = ['รอยืนยันภารกิจ', READY, 'ปฏิบัติภารกิจเรียบร้อย', 'ยกเลิกภารกิจ', 'เลื่อนภารกิจ'];
+// "รอปฏิบัติภารกิจ (ได้รับหนังสือขอใช้ บ.)" is shown on two lines: black, then green
+function statusLines(s) {
+  s = String(s || ''); const i = s.indexOf(' (');
+  if (!s.startsWith('รอปฏิบัติภารกิจ') || i < 0) return null;
+  return [{ t: s.slice(0, i), c: '000000' }, { t: s.slice(i + 1), c: '00B050' }];
+}
+const statusHtml = (s, own) => { const L = statusLines(s); return L ? L.map((x) => `<span class="stl" style="display:block${own ? '' : `;color:#${x.c}`}">${esc(x.t)}</span>`).join('') : esc(s || ''); };
 const AIRCRAFT = ['A319', 'A320', 'A340', 'ATR', 'C-130', '-'];
 const OWNERS = ['น.ต.วิชากร', 'น.ต.ณัฐพงษ์', 'น.ต.ณัช', 'ร.อ.พิชญ์พล', 'ร.อ.นรากร', 'ร.อ.ศิรวัชร์', 'ร.อ.นพดล', 'ร.อ.ธัญชนิต', 'ร.อ.ศุภกร', 'ร.อ.พิษณุ', 'ร.ท.บาร์เมษฐ์', 'ร.ท.วุฒินันท์', 'ร.ท.ศุภกาญจ์', 'ร.ท.ชัยภัทร', 'ร.ท.ฤทธิ์พงษ์', 'ร.ท.ดารากร', 'ร.ท.นิธิ'];
-const group = (s) => { s = String(s || ''); return s.includes('ยกเลิก') ? 'cancelled' : s.includes('เลื่อน') ? 'moved' : s.includes('เรียบร้อย') ? 'done' : 'pending'; };
+const group = (s) => { s = String(s || ''); return s.includes('ยกเลิก') ? 'cancelled' : s.includes('เลื่อน') ? 'moved' : s.includes('เรียบร้อย') ? 'done' : s.includes('รอปฏิบัติ') ? 'ready' : 'pending'; };
 const isRed = (s) => { const g = group(s); return g === 'cancelled' || g === 'moved'; };
 const LABEL = { no: 'NO', callsign: 'CALLSIGN', mission: 'MISSION', route: 'เส้นทางบิน', aircraft: 'AIRCRAFT', stby_aircraft: 'STBY AIRCRAFT', pax: 'PAX', owner: 'ผู้รับผิดชอบ', dates: 'วันปฏิบัติภารกิจ', status: 'ผลความก้าวหน้า', note: 'หมายเหตุ' };
 const TH_M = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -777,13 +786,13 @@ function openDatePicker(anchor, row, onDone) {
 function renderSummary() {
   const el = $('#sumbar');
   if (!S.loaded) { el.innerHTML = `<span class="stat">${S.dbChecked && !db ? 'เปิดหน้านี้ขณะลงชื่อเข้าใช้ Claude เพื่อดูข้อมูลภารกิจ' : 'กำลังโหลดข้อมูล…'}</span>`; return; }
-  const c = { done: 0, pending: 0, cancelled: 0, moved: 0 }; S.rows.forEach((r) => c[group(r.status)]++);
+  const c = { done: 0, ready: 0, pending: 0, cancelled: 0, moved: 0 }; S.rows.forEach((r) => c[group(r.status)]++);
   const today = new Date().toISOString().slice(0, 10);
-  const nx = S.rows.filter((r) => group(r.status) === 'pending' && r.start && r.start >= today).sort((a, b) => a.start.localeCompare(b.start))[0];
+  const nx = S.rows.filter((r) => (group(r.status) === 'pending' || group(r.status) === 'ready') && r.start && r.start >= today).sort((a, b) => a.start.localeCompare(b.start))[0];
   const [fa, fb] = fyRange(S.fy), fd = (iso) => { const d = pd(iso); return `${d.getUTCDate()} ${TH_M[d.getUTCMonth()]}${yy(d)}`; };
   const fys = fyList();
   const fyHtml = fys.length > 1 ? `<label class="fysel">ปีงบ <select id="fySel" aria-label="เลือกปีงบที่แสดงในตาราง">${fys.map((f) => `<option value="${f}"${f === S.fy ? ' selected' : ''}>${f}</option>`).join('')}</select></label>` : `<b>ปีงบ ${S.fy}</b>`;
-  el.innerHTML = `<span class="stat">${fyHtml} (${fd(fa)} – ${fd(fb)}) ·</span><span class="stat">ทั้งหมด <b>${S.rows.length}</b> ภารกิจ</span><span class="stat"><i class="dot done"></i>เรียบร้อย <b>${c.done}</b></span><span class="stat"><i class="dot pending"></i>รอยืนยัน <b>${c.pending}</b></span><span class="stat"><i class="dot cancelled"></i>ยกเลิก <b>${c.cancelled}</b></span><span class="stat"><i class="dot moved"></i>เลื่อน <b>${c.moved}</b></span>` +
+  el.innerHTML = `<span class="stat">${fyHtml} (${fd(fa)} – ${fd(fb)}) ·</span><span class="stat">ทั้งหมด <b>${S.rows.length}</b> ภารกิจ</span><span class="stat"><i class="dot done"></i>เรียบร้อย <b>${c.done}</b></span><span class="stat"><i class="dot ready"></i>รอปฏิบัติ <b>${c.ready}</b></span><span class="stat"><i class="dot pending"></i>รอยืนยัน <b>${c.pending}</b></span><span class="stat"><i class="dot cancelled"></i>ยกเลิก <b>${c.cancelled}</b></span><span class="stat"><i class="dot moved"></i>เลื่อน <b>${c.moved}</b></span>` +
     (nx ? `<span class="nextm">· ภารกิจถัดไป <b>${esc(nx.mission || nx.callsign)}</b> ${esc(nx.route || '')} วันที่ <b>${esc(datesInline(nx))}</b>${nx.dateTbc ? ' ' + TBC : ''}</span>` : '');
 }
 
@@ -928,6 +937,7 @@ function renderSheet() {
         const td = document.createElement('td');
         if (f === 'no') td.textContent = String(pos);
         else if (f === 'dates') { dateParts(r).forEach((p) => { const s = document.createElement('span'); s.className = 'sub'; if (p.tbc) s.dataset.tbc = '1'; s.textContent = p.t; td.append(s); }); const ch = fyChip(r); if (ch) { const c = document.createElement('span'); c.className = 'fychip' + (r.wantFy ? ' wait' : ''); c.textContent = ch; td.append(c); } }
+        else if (f === 'status' && statusLines(r.status)) td.innerHTML = statusHtml(r.status, !!fmtOf(r, 'status').c);
         else td.textContent = r[f] == null ? '' : String(r[f]);
         Object.assign(td.style, styleOf(r, f, 'px'));
         if (f === 'dates') td.querySelectorAll('[data-tbc]').forEach((s) => { s.style.color = '#' + tbcColorOf(r); });
@@ -1226,7 +1236,7 @@ function openCard(anchor, r) {
   const g = group(r.status), col = isRed(r.status) ? '#FF0000' : g === 'done' ? '#1E7A46' : 'inherit';
   const cl = findClashes().filter((c) => c.a.id === r.id || c.b.id === r.id);
   const dl = [['CALLSIGN', r.callsign], ['เส้นทางบิน', r.route], ['AIRCRAFT', r.aircraft], ['STBY AIRCRAFT', r.stby_aircraft], ['PAX', r.pax], ['ผู้รับผิดชอบ', r.owner], ['วันปฏิบัติภารกิจ', datesOf(r) + (r.dateTbc ? '\n' + TBC : '')], ['หมายเหตุ', r.note]].filter(([, v]) => v && String(v).trim());
-  p.innerHTML = `<h3>ภารกิจที่ ${POS.get(r.id)} · ${esc(r.mission || '-')}</h3><div style="color:${col};font-weight:600;font-size:13px">${esc(r.status || '')}</div>` +
+  p.innerHTML = `<h3>ภารกิจที่ ${POS.get(r.id)} · ${esc(r.mission || '-')}</h3><div style="color:${col};font-weight:600;font-size:13px">${statusHtml(r.status)}</div>` +
     (cl.length ? `<div class="clashnote">⚠ ใช้ ${esc(acKey(r))} วันซ้อนกับ ` + cl.map((c) => { const o = c.a.id === r.id ? c.b : c.a; return `ภารกิจที่ ${POS.get(o.id)} (${esc(thaiRange(c.s, c.e))})`; }).join(', ') + '</div>' : '') +
     `<dl>${dl.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl><div class="acts"><button type="button" id="cardGo">ไปที่แถวในตาราง</button><button type="button" class="primary" id="cardClose">ปิด</button></div>`;
   showPop(p, anchor, false);
@@ -1290,11 +1300,11 @@ function renderMonthCal(w0, w1) {
       const l2 = narrow ? (r.aircraft || '-') : `${r.aircraft || '-'} / STBY ${r.stby_aircraft || '-'}`;
       const l3 = r.status || '';
       h += `<button type="button" class="mev ${group(r.status)}${sg.alt ? ' alt' : ''}${clash ? ' clash' : ''}${narrow ? ' narrow' : ''}" data-id="${esc(r.id)}" style="grid-row:${sg.lane + 2};grid-column:${sg.sd + 1} / span ${span}" title="${esc(`${POS.get(r.id)}. ${r.mission || ''} · ${r.callsign || ''} · ${r.route || ''} · ${r.aircraft || '-'} / STBY ${r.stby_aircraft || '-'} · ${datesInline(r)}${r.dateTbc ? ' ' + TBC : ''} · ${r.status || ''}`)}">` +
-        `<span class="l1">${esc(l1)}</span>${!narrow && r.callsign ? `<span class="l2 cs">${esc(r.callsign)}</span>` : ''}<span class="l2">${esc(l2)}</span>${!narrow ? `<span class="l3 s-${group(r.status)}">${esc(l3)}</span>` : ''}${rangesOf(r).length > 1 ? `<span class="l2 orl">${narrow ? 'หรือ…' : esc('หรือ ' + altOthers(r, sg.idx))}</span>` : ''}</button>`;
+        `<span class="l1">${esc(l1)}</span>${!narrow && r.callsign ? `<span class="l2 cs">${esc(r.callsign)}</span>` : ''}<span class="l2">${esc(l2)}</span>${!narrow ? `<span class="l3 s-${group(r.status)}">${statusLines(l3) ? statusHtml(l3) : esc(l3)}</span>` : ''}${rangesOf(r).length > 1 ? `<span class="l2 orl">${narrow ? 'หรือ…' : esc('หรือ ' + altOthers(r, sg.idx))}</span>` : ''}</button>`;
     });
     h += '</div>';
   }
-  h += `<div class="mlegend"><b>คำอธิบาย</b><span><i style="background:#C6EFCE"></i>ปฏิบัติภารกิจเรียบร้อย</span><span><i style="background:#FFEB9C"></i>รอยืนยันภารกิจ</span><span><i style="background:#FFC7CE"></i>เลื่อนภารกิจ</span><span><i style="background:#E7E6E6"></i>ยกเลิกภารกิจ</span><span><i style="background:repeating-linear-gradient(45deg,#fff 0 4px,#FFEB9C 4px 8px);border-style:dashed"></i>วันไม่แน่นอน / มีช่วงวันทางเลือก</span><span><i style="background:rgba(255,0,0,.13)"></i>วันที่ผ่านไปแล้ว</span><span><i style="background:#C0C8D4"></i>เสาร์-อาทิตย์ / วันหยุดราชการ (ชี้หรือแตะเลขวันเพื่อดูชื่อวันหยุด)</span><span><i style="background:#1F4E8C"></i>วันนี้</span></div>`;
+  h += `<div class="mlegend"><b>คำอธิบาย</b><span><i style="background:#C6EFCE"></i>ปฏิบัติภารกิจเรียบร้อย</span><span><i style="background:#DDEBF7"></i>รอปฏิบัติภารกิจ</span><span><i style="background:#FFEB9C"></i>รอยืนยันภารกิจ</span><span><i style="background:#FFC7CE"></i>เลื่อนภารกิจ</span><span><i style="background:#E7E6E6"></i>ยกเลิกภารกิจ</span><span><i style="background:repeating-linear-gradient(45deg,#fff 0 4px,#FFEB9C 4px 8px);border-style:dashed"></i>วันไม่แน่นอน / มีช่วงวันทางเลือก</span><span><i style="background:rgba(255,0,0,.13)"></i>วันที่ผ่านไปแล้ว</span><span><i style="background:#C0C8D4"></i>เสาร์-อาทิตย์ / วันหยุดราชการ (ชี้หรือแตะเลขวันเพื่อดูชื่อวันหยุด)</span><span><i style="background:#1F4E8C"></i>วันนี้</span></div>`;
   h += '</div>';
   cal.style.width = ''; cal.innerHTML = h;
   const warn = $('#tlWarn');
@@ -1321,7 +1331,7 @@ function renderCards(shown) {
     const ch = fyChip(r);
     const dl = dateParts(r, false).map((p) => (p.tbc ? `<span class="tb" style="color:#${tbcColorOf(r)}">${TBC}</span>` : esc(p.t))).join('<br>') + (ch ? `<span class="fychip${r.wantFy ? ' wait' : ''}">${esc(ch)}</span>` : '');
     h += `<div class="mcard ${g}${pos % 2 === 0 ? ' even' : ''}${isFlash(r.id) ? ' flash' : ''}" data-id="${esc(r.id)}" role="button" tabindex="0">` +
-      `<div class="h"><span class="no">${pos}</span><span class="ti">${esc(r.mission || '(ยังไม่ใส่ชื่อภารกิจ)')}</span><span class="stt s-${g}">${esc(r.status || '')}</span></div>` +
+      `<div class="h"><span class="no">${pos}</span><span class="ti">${esc(r.mission || '(ยังไม่ใส่ชื่อภารกิจ)')}</span><span class="stt s-${g}">${statusHtml(r.status)}</span></div>` +
       `<div><span class="cs">${esc(r.callsign || '-')}</span> <span class="mu">· ${esc(r.aircraft || '-')} / STBY ${esc(r.stby_aircraft || '-')} · PAX ${esc(r.pax || '-')}</span></div>` +
       `<div class="mu">${esc(r.route || '-')}</div>` +
       `<div>${dl || '<span class="mu">ยังไม่ได้เลือกวัน</span>'}</div>` +
@@ -1490,6 +1500,7 @@ function printSheetEl(rows, meta) {
       const st = cssText(styleOf(r, f, 'pt', even));
       if (f === 'no') return `<td style="${st}">${pos}</td>`;
       if (f === 'dates') return `<td style="${st}">${dateParts(r).map((p) => `<div${p.tbc ? ` style="color:#${tbcColorOf(r)}"` : ''}>${esc(p.t)}</div>`).join('')}</td>`;
+      if (f === 'status' && statusLines(r.status)) return `<td style="${st}">${statusHtml(r.status, !!fmtOf(r, 'status').c)}</td>`;
       return `<td style="${st}">${esc(r[f] ?? '')}</td>`;
     }).join('') + '</tr>';
   });
@@ -1624,13 +1635,18 @@ function buildXLSX(rows, meta) {
     const pos = idx + 1, even = pos % 2 === 0;
     let maxH = 21;
     const cells = PCOLS.map(([f, w], i) => {
-      const v = f === 'no' ? pos : f === 'dates' ? dateParts(r).map((p) => p.t).join('\n') : (r[f] ?? '');
+      const v = f === 'no' ? pos : f === 'dates' ? dateParts(r).map((p) => p.t).join('\n') : f === 'status' && statusLines(r.status) ? statusLines(r.status).map((p) => p.t).join('\n') : (r[f] ?? '');
       const m = fmtOf(r, f), sz = m.sz || 14;
       const col = m.c || (f === 'status' && isRed(r.status) ? 'FF0000' : f === 'status' && group(r.status) === 'done' ? '00B050' : '000000');
       const bg = m.bg || (even ? 'D9D9D9' : '');
       const st = xf(font(sz, m.b === true, !!m.i, col), fill(bg), 1, 'center', 1);
       const lines = String(v).split('\n').reduce((n, part) => n + Math.max(1, Math.ceil(part.length * (sz / 14) / (w * 0.95))), 0);
       maxH = Math.max(maxH, lines * sz * 1.36);
+      if (f === 'status' && statusLines(r.status) && !m.c) {
+        const rp = (c) => `<rPr>${m.b === true ? '<b/>' : ''}${m.i ? '<i/>' : ''}<sz val="${sz}"/><color rgb="FF${c}"/><rFont val="TH SarabunPSK"/><charset val="222"/></rPr>`;
+        const runs = statusLines(r.status).map((p, k) => `<r>${rp(p.c)}<t xml:space="preserve">${xesc((k ? '\n' : '') + p.t)}</t></r>`).join('');
+        return `<c r="${colL(i) + rn}" s="${st}" t="inlineStr"><is>${runs}</is></c>`;
+      }
       if (f === 'dates' && r.dateTbc) {
         const rp = (c) => `<rPr>${m.b === true ? '<b/>' : ''}${m.i ? '<i/>' : ''}<sz val="${sz}"/><color rgb="FF${c}"/><rFont val="TH SarabunPSK"/><charset val="222"/></rPr>`;
         const parts = dateParts(r); let runs = '';
