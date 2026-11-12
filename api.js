@@ -23,7 +23,7 @@
   let ME = null;
   function setMe(m) {
     if (!m) return;
-    const next = { name: String(m.name || ''), role: String(m.role || ''), super: m.super === true, owner: String(m.owner || ''), ownerOld: String(m.ownerOld || '') };
+    const next = { name: String(m.name || ''), role: String(m.role || ''), super: m.super === true, owner: String(m.owner || '') };
     next.edit = next.role === 'Admin' || next.role === 'Editor';
     if (JSON.stringify(next) === JSON.stringify(ME)) return;
     ME = next; window.dispatchEvent(new Event('app-me'));
@@ -72,11 +72,11 @@
   async function loadLogs() { if (!subs.logs.length) return; if (curFy == null) return; try { const r = await api('listLogs', { fy: curFy, limit: 200 }); D.logs = (r.list || []).map((l) => ({ ...l, by: '' })); emit('logs'); } catch (_) {} }
 
   let syncing = false, pending = 0, timer = null;
-  async function sync(hello) {
+  async function sync() {
     if (!PASSV() || syncing || pending) return;
     syncing = true;
     try {
-      const r = await api('sync', { ver: D.ver, hello: hello === true });
+      const r = await api('sync', { ver: D.ver });
       setMe(r.me);
       if (r.files) setFiles(r.files);
       if (r.missions && !pending) { D.settings = r.holidays ? [{ id: 'holidays', map: r.holidays }] : []; emit('settings'); setMissions(r.missions, r.ver); loadLogs(); }
@@ -178,7 +178,7 @@
       PASS_OF = '';
       await getPass();
       D.ver = 0; D.snapAt = -1; clearTimeout(timer);
-      await sync(true);                                     // hello: the old-style ผู้รับผิดชอบ of this account gets its surname initial
+      await sync();
       clearTimeout(timer); timer = setTimeout(loop, POLL_MS);
       return ME;
     },

@@ -90,10 +90,9 @@ const API = {
   // ส่งข้อมูลกลับเฉพาะเมื่อมีการเปลี่ยนแปลงหลังเวอร์ชันที่หน้าเว็บถืออยู่
   // ไฟล์ทุกปีงบ + ภารกิจของทุกปีงบ (ไทม์ไลน์แสดงคร่อมปีงบได้)
   sync: function (r, s) {
-    if (r.hello) claimOwner_(s);
     const v = ver_(), files = files_();
     // me: the name (column ชื่อ-สกุล), the Role in this web and whether this is the main admin, from the login system
-    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files, me: { name: s.name, role: s.role, super: s.super, owner: s.owner, ownerOld: s.ownerOld } };
+    const out = { ver: v, snapAt: Number(prop_('SNAP_AT') || 0), files: files, me: { name: s.name, role: s.role, super: s.super, owner: s.owner } };
     if (Number(r.ver) !== v) {
       out.missions = {};
       Object.keys(files).forEach(function (fy) { try { out.missions[fy] = readMissions_(fy); } catch (x) { out.missions[fy] = []; } });
@@ -332,45 +331,20 @@ function auth_(pass, fresh) {
   const u = j.user || {}, role = String(j.role || '');
   // the recorder: column "ชื่อ-สกุล" of the account's row in LOGIN DATABASE, found by the login system (Username as fallback)
   const who = { name: String(u.name || u.username || '').trim().slice(0, 60), role: role, edit: role === 'Admin' || role === 'Editor', admin: role === 'Admin', super: j.super === true };
-  // the name in the column ผู้รับผิดชอบ: rank + first name + first letter of the surname (user, 12 Nov 2026), e.g. ร.อ.สมชาย ใ.
-  who.owner = ownerOf_(u.rank, u.name); who.ownerOld = ownerOf_(u.rank, String(u.name || '').trim().split(/\s+/)[0]);
+  // the name in the column ผู้รับผิดชอบ: rank + first name (user, 12 Nov 2026), e.g. ร.อ.สมชาย
+  who.owner = ownerOf_(u.rank, u.name);
   const left = Math.floor((Number(j.expiresAt) - Date.now()) / 1000);
   if (left > 1) cache.put('who:' + key, JSON.stringify(who), Math.min(CFG.CHECK_SEC, left));
   return who;
 }
-/* ผู้รับผิดชอบภารกิจ: ยศ (column ยศ) ติดกับชื่อ แล้วเว้นวรรค อักษรตัวแรกของสกุลและจุด เช่น "ร.อ.สมชาย ใ."
-   ชื่อกับสกุลแยกที่ช่องว่างแรกของ column ชื่อ-สกุล. A surname that starts with a leading vowel (เ แ โ ใ ไ) gives its first
-   consonant, as Thai initials are written. The old way (rank + first name only, e.g. "ร.อ.สมชาย") counts as the same person. */
+/* ผู้รับผิดชอบภารกิจ: ยศ (column ยศ) ติดกับชื่อ (คำก่อนช่องว่างแรกของ column ชื่อ-สกุล) เช่น "ร.อ.สมชาย" (ผู้ใช้สั่ง 12 พ.ย. 2026)
+   การเทียบไม่สนช่องว่าง (ownerKey_) */
 function ownerOf_(rank, name) {
-  const parts = String(name || '').trim().split(/\s+/), first = parts[0] || '', sur = parts.slice(1).join('');
-  const ini = (sur.replace(/^[เแโใไ]+/, '') || sur).charAt(0);
-  return (String(rank || '').replace(/\s+/g, '') + first + (ini ? ' ' + ini + '.' : '')).trim();
+  const first = String(name || '').trim().split(/\s+/)[0] || '';
+  return (String(rank || '').replace(/\s+/g, '') + first).trim();
 }
-function ownerKey_(v) { return String(v || '').replace(/\s+/g, '').replace(/\.$/, ''); }
-function isMine_(owner, s) { const k = ownerKey_(owner); return !!k && (k === ownerKey_(s.owner) || k === ownerKey_(s.ownerOld)); }
-// the missions of this account written the old way (rank + first name): the surname initial is filled in, once, when it opens the page
-function claimOwner_(s) {
-  if (!s.owner || ownerKey_(s.owner) === ownerKey_(s.ownerOld)) return;
-  const old = ownerKey_(s.ownerOld);
-  const st = allMaps_(); let n = 0;
-  Object.keys(st.maps).forEach(function (fy) {
-    objValues_(st.maps[fy]).forEach(function (m) { if (ownerKey_(m.owner) === old) { m.owner = s.owner; st.dirty[fy] = 1; n++; } });
-  });
-  if (!n) return;
-  withLock_(function () {
-    const fresh = allMaps_(), logs = {};
-    Object.keys(fresh.maps).forEach(function (fy) {
-      objValues_(fresh.maps[fy]).forEach(function (m) {
-        if (ownerKey_(m.owner) !== old) return;
-        (logs[fy] = logs[fy] || []).push(logRow_({ action: 'edit', mid: m.id, no: m.no || '', mission: m.mission || '', field: 'owner', from: m.owner, to: s.owner }, 'ระบบ (เติมสกุลย่อ)'));
-        m.owner = s.owner; fresh.dirty[fy] = 1;
-      });
-    });
-    saveMaps_(fresh);
-    Object.keys(logs).forEach(function (fy) { appendLogs_(fy, logs[fy]); });
-    if (Object.keys(fresh.dirty).length) bump_();
-  });
-}
+function ownerKey_(v) { return String(v || '').replace(/\s+/g, ''); }
+function isMine_(owner, s) { const k = ownerKey_(owner); return !!k && k === ownerKey_(s.owner); }
 function sha256_(t) {
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, t, Utilities.Charset.UTF_8)
     .map(function (b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');

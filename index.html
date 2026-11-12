@@ -810,8 +810,8 @@ const ownerList = () => { const s = new Set(OWNERS); S.rows.forEach((r) => { con
 const COMBO = { aircraft: acList, stby_aircraft: acList, owner: ownerList };
 // ผู้รับผิดชอบ: an Editor edits, formats and moves only the missions this account is responsible for, adds new ones as
 // its own and deletes none; an Admin of this web does everything. The Apps Script checks the same (not_owner).
-const ownerKey = (v) => String(v || '').replace(/\s+/g, '').replace(/\.$/, '');
-const mine = (r) => !!S.isAdmin || (!!r && !!ownerKey(r.owner) && (ownerKey(r.owner) === ownerKey(S.myOwner) || ownerKey(r.owner) === ownerKey(S.myOwnerOld)));
+const ownerKey = (v) => String(v || '').replace(/\s+/g, '');
+const mine = (r) => !!S.isAdmin || (!!r && !!ownerKey(r.owner) && ownerKey(r.owner) === ownerKey(S.myOwner));
 const notMine = () => toast('แก้ไขได้เฉพาะภารกิจที่ท่านเป็นผู้รับผิดชอบ');
 const trs = new Map(); let gridMode = null;
 
@@ -1920,7 +1920,7 @@ function applyMe() {
   const me = window.APP_AUTH && window.APP_AUTH.me(); if (!me) return;
   if (S.canWrite && !me.edit) { S.edit = false; S.sel = null; S.armDel = null; closePv(); }
   S.canWrite = me.edit; S.isSuper = me.super; S.isAdmin = me.role === 'Admin'; S.role = me.role; S.loginName = me.name;
-  S.myOwner = me.owner; S.myOwnerOld = me.ownerOld; gridMode = null; setWho(); renderAll();
+  S.myOwner = me.owner; gridMode = null; setWho(); renderAll();
 }
 window.addEventListener('app-me', applyMe);
 window.addEventListener('app-toast', (e) => { if (e.detail) toast(e.detail); });
