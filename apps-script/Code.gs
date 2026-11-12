@@ -40,7 +40,7 @@ const CFG = {
   KEEP_BACKUPS: 20,
   KEEP_SNAPS: 20,
   SESSION_SEC: 3600,                 // ใส่รหัสแล้วใช้ได้ 1 ชั่วโมง
-  LOG_DAYS: 365,
+  LOG_DAYS: 0,                       // 0 = เก็บประวัติการแก้ไขไว้ตลอด (แต่ละปีงบมีไฟล์ของตัวเองอยู่แล้ว)
   TZ: 'Asia/Bangkok',
   TITLE: 'ภารกิจต่างประเทศ ฝูง.602 บน.6 ปีงบประมาณ ',
   BACKUP_TAG: 'ภารกิจต่างประเทศปี'   // ชื่อไฟล์ Backup ที่ระบบสร้าง มีคำนี้อยู่
@@ -415,6 +415,7 @@ function logsList_(fy, n) {
   });
 }
 function pruneLogs() {
+  if (!(CFG.LOG_DAYS > 0)) return; // ไม่ลบประวัติ
   Object.keys(files_()).forEach(function (fy) {
     const sh = sheet_(fy, 'logs', LOG_HEAD);
     const last = sh.getLastRow(); if (last < 2) return;
@@ -623,7 +624,7 @@ function setup() {
   }
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('renderIfDirty').timeBased().everyMinutes(1).create();
-  ScriptApp.newTrigger('pruneLogs').timeBased().atHour(2).everyDays(1).inTimezone(CFG.TZ).create();
+  if (CFG.LOG_DAYS > 0) ScriptApp.newTrigger('pruneLogs').timeBased().atHour(2).everyDays(1).inTimezone(CFG.TZ).create();
   try { DriveApp.getFolderById(CFG.BACKUP_FOLDER_ID).getName(); } // ขอสิทธิ์ Drive ตอนนี้
   catch (x) { Logger.log('⚠ เปิดโฟลเดอร์ Backup ไม่ได้: แชร์โฟลเดอร์ให้บัญชี ' + me_() + ' เป็น "ผู้แก้ไข"'); }
   bump_();
