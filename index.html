@@ -89,7 +89,7 @@ button:disabled{opacity:.45;cursor:default}
 .mcard .no{font-weight:700;color:var(--muted);min-width:1.4em}
 .mcard .ti{font-weight:600;flex:1;min-width:0}
 .mcard .stt{font-size:12px;font-weight:600;white-space:nowrap}
-.s-done{color:var(--ok)}.s-ready{color:var(--fg)}.s-active{color:#7030A0}.s-pending{color:var(--warn)}.s-cancelled,.s-moved{color:var(--danger)}
+.s-done{color:var(--ok)}.s-ready{color:var(--fg)}.s-active{color:var(--fg)}.s-pending{color:var(--warn)}.s-cancelled,.s-moved{color:var(--danger)}
 .mcard .cs{font-weight:600}
 .mcard .mu{color:var(--muted)}
 .mcard .tb{font-weight:600}
@@ -259,7 +259,7 @@ kbd{font-family:var(--f-ui);font-size:11px;border:1px solid var(--line);border-b
 .month .mev .tb{color:#FF0000;font-weight:700}
 .month .mev.narrow{padding:1px 1px}.month .mev.narrow .l1{font-size:12.5px;line-height:1.05}
 .month .mev .l3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700}
-.month .mev .s-done{color:#006100}.month .mev .s-ready{color:#000}.month .mev .s-active{color:#5B2C83}.month .mev .s-pending{color:#9C5700}.month .mev .s-cancelled,.month .mev .s-moved{color:#C00000}
+.month .mev .s-done{color:#006100}.month .mev .s-ready{color:#000}.month .mev .s-active{color:#000}.month .mev .s-pending{color:#9C5700}.month .mev .s-cancelled,.month .mev .s-moved{color:#C00000}
 .month .mempty{grid-column:2/-1;display:flex;align-items:center;justify-content:center;color:#666;font-family:var(--f-ui);font-size:12.5px;z-index:1;pointer-events:none;border:0!important}
 .month .mempty span{background:#fff;padding:1px 10px;border-radius:4px}
 .mlegend{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;font-size:14px;padding:2px}
@@ -524,7 +524,7 @@ function styleOf(r, f, unit, even) {
   if (m.b === true) st.fontWeight = '700'; else if (m.b === false) st.fontWeight = '400';
   if (m.i) st.fontStyle = 'italic';
   if (m.sz) st.fontSize = unit === 'pt' ? m.sz + 'pt' : (m.sz * 19 / 14).toFixed(1) + 'px';
-  if (m.c) st.color = '#' + m.c; else if (f === 'status' && isRed(r.status)) st.color = '#FF0000'; else if (f === 'status' && group(r.status) === 'done') st.color = '#00B050'; else if (f === 'status' && group(r.status) === 'active') st.color = '#7030A0';
+  if (m.c) st.color = '#' + m.c; else if (f === 'status' && isRed(r.status)) st.color = '#FF0000'; else if (f === 'status' && group(r.status) === 'done') st.color = '#00B050';
   if (m.bg) st.background = '#' + m.bg; else if (unit === 'pt' && even) st.background = '#D9D9D9';
   return st;
 }
@@ -1268,7 +1268,7 @@ function renderTimeline(pr) {
 }
 function openCard(anchor, r) {
   const p = document.createElement('div'); p.className = 'pop card-pop'; p.setAttribute('role', 'dialog');
-  const g = group(r.status), col = isRed(r.status) ? '#FF0000' : g === 'done' ? '#1E7A46' : g === 'active' ? '#7030A0' : 'inherit';
+  const g = group(r.status), col = isRed(r.status) ? '#FF0000' : g === 'done' ? '#1E7A46' : 'inherit';
   const cl = findClashes().filter((c) => c.a.id === r.id || c.b.id === r.id);
   const dl = [['CALLSIGN', r.callsign], ['เส้นทางบิน', r.route], ['AIRCRAFT', r.aircraft], ['STBY AIRCRAFT', r.stby_aircraft], ['PAX', r.pax], ['ผู้รับผิดชอบ', r.owner], ['วันปฏิบัติภารกิจ', datesOf(r) + (r.dateTbc ? '\n' + TBC : '')], ['หมายเหตุ', r.note]].filter(([, v]) => v && String(v).trim());
   p.innerHTML = `<h3>ภารกิจที่ ${POS.get(r.id)} · ${esc(r.mission || '-')}</h3><div style="color:${col};font-weight:600;font-size:13px">${statusHtml(r.status)}</div>` +
@@ -1673,7 +1673,7 @@ function buildXLSX(rows, meta) {
     const cells = PCOLS.map(([f, w], i) => {
       const v = f === 'no' ? pos : f === 'dates' ? dateParts(r).map((p) => p.t).join('\n') : f === 'status' && statusLines(r.status) ? statusLines(r.status).map((p) => p.t).join('\n') : (r[f] ?? '');
       const m = fmtOf(r, f), sz = m.sz || 14;
-      const col = m.c || (f === 'status' && isRed(r.status) ? 'FF0000' : f === 'status' && group(r.status) === 'done' ? '00B050' : f === 'status' && group(r.status) === 'active' ? '7030A0' : '000000');
+      const col = m.c || (f === 'status' && isRed(r.status) ? 'FF0000' : f === 'status' && group(r.status) === 'done' ? '00B050' : '000000');
       const bg = m.bg || (even ? 'D9D9D9' : '');
       const st = xf(font(sz, m.b === true, !!m.i, col), fill(bg), 1, 'center', 1);
       const lines = String(v).split('\n').reduce((n, part) => n + Math.max(1, Math.ceil(part.length * (sz / 14) / (w * 0.95))), 0);

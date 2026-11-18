@@ -624,7 +624,7 @@ function renderDisplay_(fy) {
       const f = pc[0], m = (r.fmt && r.fmt[f]) || {};
       let val = f === 'no' ? String(pos) : f === 'dates' ? dateParts_(r).map(function (p) { return p.t; }).join('\n') : String(r[f] == null ? '' : r[f]);
       const g = group_(r.status);
-      const col = m.c ? '#' + m.c : (f === 'status' && (g === 'cancelled' || g === 'moved') ? '#FF0000' : f === 'status' && g === 'done' ? '#00B050' : f === 'status' && g === 'active' ? '#7030A0' : '#000000');
+      const col = m.c ? '#' + m.c : (f === 'status' && (g === 'cancelled' || g === 'moved') ? '#FF0000' : f === 'status' && g === 'done' ? '#00B050' : '#000000');
       v.push(val); fc.push(col); bg.push(m.bg ? '#' + m.bg : (even ? '#D9D9D9' : null));
       fw.push(m.b === true ? 'bold' : 'normal'); fs.push(m.i ? 'italic' : 'normal'); sz.push(gsz_(m.sz || 14));
       const ln = val.split('\n').reduce(function (n, part) { return n + Math.max(1, Math.ceil(part.length * ((m.sz || 14) / 14) / (pc[1] * 0.95))); }, 0);
