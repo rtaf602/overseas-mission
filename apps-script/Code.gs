@@ -547,7 +547,7 @@ const PCOLS = [['no', 4.7], ['callsign', 14], ['mission', 19.9], ['route', 30.3]
 const PHEAD = ['NO', 'CALLSIGN', 'MISSION', 'เส้นทางบิน', 'AIRCRAFT', 'STBY AIRCRAFT', 'PAX', 'ผู้รับผิดชอบ', 'วันปฏิบัติภารกิจ', 'ผลความก้าวหน้า'];
 const TBC = '(รอยืนยัน)';
 
-function group_(s) { s = String(s || ''); return s.indexOf('ยกเลิก') >= 0 ? 'cancelled' : s.indexOf('เลื่อน') >= 0 ? 'moved' : s.indexOf('เรียบร้อย') >= 0 ? 'done' : s.indexOf('รอปฏิบัติ') >= 0 ? 'ready' : 'pending'; }
+function group_(s) { s = String(s || ''); return s.indexOf('ยกเลิก') >= 0 ? 'cancelled' : s.indexOf('เลื่อน') >= 0 ? 'moved' : s.indexOf('เรียบร้อย') >= 0 ? 'done' : s.indexOf('ระหว่างปฏิบัติ') >= 0 ? 'active' : s.indexOf('รอปฏิบัติ') >= 0 ? 'ready' : 'pending'; }
 // "รอปฏิบัติภารกิจ (ได้รับหนังสือขอใช้ บ.)" แสดง 2 บรรทัด: ดำ แล้วเขียว
 function statusLines_(s) {
   s = String(s || ''); const i = s.indexOf(' (');
@@ -624,7 +624,7 @@ function renderDisplay_(fy) {
       const f = pc[0], m = (r.fmt && r.fmt[f]) || {};
       let val = f === 'no' ? String(pos) : f === 'dates' ? dateParts_(r).map(function (p) { return p.t; }).join('\n') : String(r[f] == null ? '' : r[f]);
       const g = group_(r.status);
-      const col = m.c ? '#' + m.c : (f === 'status' && (g === 'cancelled' || g === 'moved') ? '#FF0000' : f === 'status' && g === 'done' ? '#00B050' : '#000000');
+      const col = m.c ? '#' + m.c : (f === 'status' && (g === 'cancelled' || g === 'moved') ? '#FF0000' : f === 'status' && g === 'done' ? '#00B050' : f === 'status' && g === 'active' ? '#7030A0' : '#000000');
       v.push(val); fc.push(col); bg.push(m.bg ? '#' + m.bg : (even ? '#D9D9D9' : null));
       fw.push(m.b === true ? 'bold' : 'normal'); fs.push(m.i ? 'italic' : 'normal'); sz.push(gsz_(m.sz || 14));
       const ln = val.split('\n').reduce(function (n, part) { return n + Math.max(1, Math.ceil(part.length * ((m.sz || 14) / 14) / (pc[1] * 0.95))); }, 0);
